@@ -3,18 +3,46 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
-  ArrowRight,
-  Check,
-  MapPin,
-  MessageCircle,
-  Smartphone,
-} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { motion, MotionConfig } from 'motion/react';
+import { ArrowRight, Check } from 'lucide-react';
 import { Navbar } from './components/Navbar';
-import { ContactForm } from './components/ContactForm';
+import { HeroPreviewCard } from './components/HeroPreviewCard';
+import { ContactForm, PACKAGE_OPTIONS } from './components/ContactForm';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { OwnerInbox } from './components/OwnerInbox';
 import { PRICING_TIERS, SERVICES } from './data/samples';
+import {
+  ANTICIPATION_HOVER,
+  ARC_ITEM,
+  EASE_SLOW_IN_OUT,
+  SPRING_EXAGGERATED,
+  SPRING_SNAPPY,
+  SQUASH_TAP,
+  STAGGER_CONTAINER,
+} from './lib/motionPresets';
+import './lib/firebase';
+
+const TIER_TO_PACKAGE: Record<string, string> = {
+  'Starter Page': PACKAGE_OPTIONS[0],
+  'Full Local Business Site': PACKAGE_OPTIONS[1],
+  'Custom Order & Booking Site': PACKAGE_OPTIONS[2],
+};
 
 export default function App() {
+  const [showInbox, setShowInbox] = useState(() => window.location.hash === '#/inbox');
+  const [selectedPackage, setSelectedPackage] = useState<string>(PACKAGE_OPTIONS[0]);
+  const [hoveredService, setHoveredService] = useState<string | null>(null);
+  const [hoveredTier, setHoveredTier] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onHashChange = () => {
+      setShowInbox(window.location.hash === '#/inbox');
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
   const handleNavigateSection = (sectionId: string) => {
     if (sectionId === 'top') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -26,272 +54,339 @@ export default function App() {
     }
   };
 
+  // Frequency of use + Doherty threshold: clicking any tier selects it immediately & jumps to form
+  const handleSelectPackage = (tierName: string) => {
+    const mapped = TIER_TO_PACKAGE[tierName] ?? PACKAGE_OPTIONS[0];
+    setSelectedPackage(mapped);
+    handleNavigateSection('contact');
+  };
+
+  const openInbox = () => {
+    window.location.hash = '#/inbox';
+    setShowInbox(true);
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+  };
+
+  const closeInbox = () => {
+    window.location.hash = '';
+    setShowInbox(false);
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+  };
+
   return (
-    <div id="top" className="min-h-screen bg-slate-50 text-slate-900">
-      <Navbar onNavigateSection={handleNavigateSection} />
+    <MotionConfig reducedMotion="user">
+      <ErrorBoundary>
+        {showInbox ? (
+          <OwnerInbox onBack={closeInbox} />
+        ) : (
+          <div id="top" className="min-h-screen bg-slate-50 text-slate-900">
+            <Navbar onNavigateSection={handleNavigateSection} />
 
-      <main>
-        {/* Hero Section */}
-        <section className="mx-auto max-w-6xl px-4 pt-12 pb-12 sm:px-6 lg:pt-20 lg:pb-16">
-          <div className="grid items-stretch gap-10 lg:grid-cols-12">
-            <div className="flex flex-col justify-center lg:col-span-7">
-              <p className="text-sm font-medium text-[#0F5C43]">
-                Nairobi, Kenya · Web design by Emmanuel Nthiga
-              </p>
-              <h1 className="font-display mt-3 text-[clamp(2.25rem,4vw,3.5rem)] font-bold leading-[1.12] tracking-tight text-slate-900 text-balance">
-                I build simple websites so customers find your business on Google and WhatsApp you.
-              </h1>
-              <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-600 sm:text-lg">
-                Whether you run a salon, barbershop, food business, or retail shop, customers check their phones before they visit. I put your KSh prices, Google Maps pin, and direct WhatsApp button on one clean page — starting from KSh 200.
-              </p>
+            <main>
+              {/* Hero Section */}
+              <section className="mx-auto max-w-6xl px-4 pt-12 pb-12 sm:px-6 lg:pt-20 lg:pb-16">
+                <div className="grid items-stretch gap-10 lg:grid-cols-12">
+                  {/* Left column: pose-to-pose staggered focal entrance */}
+                  <motion.div
+                    variants={STAGGER_CONTAINER}
+                    initial="hidden"
+                    animate="visible"
+                    className="flex flex-col justify-center lg:col-span-7"
+                  >
+                    <motion.p variants={ARC_ITEM} className="text-sm font-medium text-[#0F5C43]">
+                      Nairobi, Kenya · Web design by Emmanuel Nthiga
+                    </motion.p>
+                    <motion.h1
+                      variants={ARC_ITEM}
+                      className="font-display mt-3 text-[clamp(2.25rem,4vw,3.5rem)] font-bold leading-[1.12] tracking-tight text-slate-900 text-balance"
+                    >
+                      I build simple websites so customers find your business on Google and WhatsApp you.
+                    </motion.h1>
+                    <motion.p
+                      variants={ARC_ITEM}
+                      className="mt-5 max-w-xl text-base leading-relaxed text-slate-600 sm:text-lg"
+                    >
+                      Whether you run a salon, barbershop, food business, or retail shop, customers check their phones before they visit. I put your KSh prices, Google Maps pin, and direct WhatsApp button on one clean page — starting from KSh 200.
+                    </motion.p>
 
-              <div className="mt-7 flex flex-wrap items-center gap-4">
-                <a
-                  href="#contact"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleNavigateSection('contact');
-                  }}
-                  className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-[#0F5C43] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#0B4734] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0F5C43]"
-                >
-                  Start your website
-                  <ArrowRight className="h-4 w-4" />
-                </a>
-                <a
-                  href="#pricing"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleNavigateSection('pricing');
-                  }}
-                  className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-100"
-                >
-                  View pricing (from KSh 200)
-                </a>
-              </div>
-            </div>
+                    {/* Fitts's Law: generous 50px+ hit areas with anticipation + squash/stretch */}
+                    <motion.div
+                      variants={ARC_ITEM}
+                      className="mt-7 flex flex-wrap items-center gap-4"
+                    >
+                      <motion.a
+                        href="#contact"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleNavigateSection('contact');
+                        }}
+                        whileHover={ANTICIPATION_HOVER}
+                        whileTap={SQUASH_TAP}
+                        className="group inline-flex min-h-[50px] items-center gap-2.5 rounded-lg bg-[#0F5C43] px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-[#0B4734] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0F5C43]"
+                      >
+                        <span>Start your website</span>
+                        <ArrowRight className="h-4 w-4 transition-transform duration-150 group-hover:translate-x-1" />
+                      </motion.a>
+                      <motion.a
+                        href="#pricing"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleNavigateSection('pricing');
+                        }}
+                        whileHover={{ y: -1 }}
+                        whileTap={SQUASH_TAP}
+                        className="inline-flex min-h-[50px] items-center rounded-lg border border-slate-300 bg-white px-5 py-3 text-base font-medium text-slate-800 transition-colors hover:bg-slate-100"
+                      >
+                        View pricing (from KSh 200)
+                      </motion.a>
+                    </motion.div>
+                  </motion.div>
 
-            {/* Right column: Concrete preview of what a local business gets */}
-            <div className="lg:col-span-5">
-              <div className="flex h-full flex-col justify-between rounded-xl border border-slate-200 bg-white p-6 sm:p-7">
-                <div>
-                  <p className="text-xs font-medium text-slate-500">
-                    What goes on your business page
-                  </p>
-                  <h2 className="font-display mt-1.5 text-xl font-bold text-slate-900">
-                    Everything a customer needs before visiting or ordering
-                  </h2>
-
-                  <ul className="mt-5 divide-y divide-slate-100 text-sm">
-                    <li className="flex items-start gap-3 py-3">
-                      <Smartphone className="mt-0.5 h-4 w-4 shrink-0 text-[#0F5C43]" />
-                      <div>
-                        <p className="font-medium text-slate-900">Clear KSh service & price list</p>
-                        <p className="text-slate-600">
-                          Customers see your exact prices without having to DM "how much?".
-                        </p>
-                      </div>
-                    </li>
-                    <li className="flex items-start gap-3 py-3">
-                      <MessageCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#0F5C43]" />
-                      <div>
-                        <p className="font-medium text-slate-900">One-tap WhatsApp booking</p>
-                        <p className="text-slate-600">
-                          Opens a ready-to-send message straight to your WhatsApp number.
-                        </p>
-                      </div>
-                    </li>
-                    <li className="flex items-start gap-3 py-3">
-                      <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#0F5C43]" />
-                      <div>
-                        <p className="font-medium text-slate-900">Google Maps & M-Pesa Till</p>
-                        <p className="text-slate-600">
-                          Directions straight to your shop and a Till number customers can copy.
-                        </p>
-                      </div>
-                    </li>
-                  </ul>
+                  {/* Right column: Solid drawing in 3D interactive preview card */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 20, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ duration: 0.45, delay: 0.12, ease: EASE_SLOW_IN_OUT }}
+                    className="lg:col-span-5"
+                  >
+                    <HeroPreviewCard onStartWebsite={() => handleNavigateSection('contact')} />
+                  </motion.div>
                 </div>
 
-                <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4 text-xs text-slate-500">
-                  <span>Built to load fast on mobile data</span>
-                  <span className="font-mono-num font-semibold text-slate-900">From KSh 200</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Factual baseline strip */}
-          <div className="mt-12 grid gap-4 border-y border-slate-200 py-6 sm:grid-cols-3">
-            <div>
-              <p className="font-mono-num text-base font-semibold text-slate-900">
-                Starting from KSh 200
-              </p>
-              <p className="mt-1 text-sm text-slate-600">
-                Clear price agreed upfront before I start building.
-              </p>
-            </div>
-            <div>
-              <p className="font-display text-base font-semibold text-slate-900">
-                Built for Kenyan phones
-              </p>
-              <p className="mt-1 text-sm text-slate-600">
-                Clean pages that open quickly even on normal mobile bundles.
-              </p>
-            </div>
-            <div>
-              <p className="font-display text-base font-semibold text-slate-900">
-                You talk directly to me
-              </p>
-              <p className="mt-1 text-sm text-slate-600">
-                No agency middlemen — message me anytime for updates.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* Services Section */}
-        <section id="services" className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
-          <div className="max-w-2xl">
-            <h2 className="font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-              What I build for local businesses
-            </h2>
-            <p className="mt-2 text-base text-slate-600">
-              Practical features that help people find your shop, check your prices, and contact you without friction.
-            </p>
-          </div>
-
-          <div className="mt-8 grid gap-6 md:grid-cols-2">
-            {SERVICES.map((service) => (
-              <article
-                key={service.number}
-                className="rounded-xl border border-slate-200 bg-white p-6 transition-colors hover:border-slate-300"
-              >
-                <p className="font-mono-num text-xs font-semibold text-[#0F5C43]">
-                  {service.number}
-                </p>
-                <h3 className="font-display mt-2 text-lg font-semibold text-slate-900">
-                  {service.title}
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                  {service.description}
-                </p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        {/* Pricing Section */}
-        <section id="pricing" className="border-t border-slate-200 bg-white py-16">
-          <div className="mx-auto max-w-6xl px-4 sm:px-6">
-            <div className="max-w-2xl">
-              <h2 className="font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                Clear pricing, starting from KSh 200
-              </h2>
-              <p className="mt-2 text-base text-slate-600">
-                Start small with a clean WhatsApp & price page, or go for a full website as your business grows.
-              </p>
-            </div>
-
-            <div className="mt-8 grid gap-6 lg:grid-cols-3">
-              {PRICING_TIERS.map((tier) => (
-                <div
-                  key={tier.name}
-                  className={`flex flex-col justify-between rounded-xl border bg-slate-50/50 p-6 ${
-                    tier.recommended
-                      ? 'border-[#0F5C43] bg-white ring-1 ring-[#0F5C43]'
-                      : 'border-slate-200 bg-white'
-                  }`}
+                {/* Miller's Law: 3 crisp factual baseline points */}
+                <motion.div
+                  variants={STAGGER_CONTAINER}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true, amount: 0.4 }}
+                  className="mt-12 grid gap-4 border-y border-slate-200 py-6 sm:grid-cols-3"
                 >
-                  <div>
-                    <div className="flex items-baseline justify-between gap-2">
-                      <h3 className="font-display text-lg font-bold text-slate-900">{tier.name}</h3>
-                      <span className="text-xs text-slate-500 whitespace-nowrap">{tier.timeline}</span>
-                    </div>
-                    <p className="font-mono-num mt-3 text-2xl font-bold text-[#0F5C43]">
-                      {tier.price}
+                  <motion.div variants={ARC_ITEM}>
+                    <p className="font-mono-num text-base font-semibold text-slate-900">
+                      Starting from KSh 200
                     </p>
-                    <p className="mt-2 text-sm leading-relaxed text-slate-600">{tier.description}</p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Clear price agreed upfront before I start building.
+                    </p>
+                  </motion.div>
+                  <motion.div variants={ARC_ITEM}>
+                    <p className="font-display text-base font-semibold text-slate-900">
+                      Built for Kenyan phones
+                    </p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Clean pages that open quickly even on normal mobile bundles.
+                    </p>
+                  </motion.div>
+                  <motion.div variants={ARC_ITEM}>
+                    <p className="font-display text-base font-semibold text-slate-900">
+                      You talk directly to me
+                    </p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      No agency middlemen — message me anytime for updates.
+                    </p>
+                  </motion.div>
+                </motion.div>
+              </section>
 
-                    <ul className="mt-5 space-y-2.5 border-t border-slate-100 pt-5 text-sm text-slate-700">
-                      {tier.items.map((item) => (
-                        <li key={item} className="flex items-start gap-2.5">
-                          <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#0F5C43]" />
-                          <span>{item}</span>
-                        </li>
-                      ))}
-                    </ul>
+              {/* Services Section with Staging (focus) + Arc entry */}
+              <section id="services" className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
+                <div className="max-w-2xl">
+                  <h2 className="font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                    What I build for local businesses
+                  </h2>
+                  <p className="mt-2 text-base text-slate-600">
+                    Practical features that help people find your shop, check your prices, and contact you without friction.
+                  </p>
+                </div>
+
+                <motion.div
+                  variants={STAGGER_CONTAINER}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true, amount: 0.2 }}
+                  className="mt-8 grid gap-6 md:grid-cols-2"
+                >
+                  {SERVICES.map((service) => {
+                    const isFocused = hoveredService === service.number;
+                    const isDimmed = hoveredService !== null && !isFocused;
+                    return (
+                      <motion.article
+                        key={service.number}
+                        variants={ARC_ITEM}
+                        onMouseEnter={() => setHoveredService(service.number)}
+                        onMouseLeave={() => setHoveredService(null)}
+                        animate={{
+                          y: isFocused ? -4 : 0,
+                          opacity: isDimmed ? 0.68 : 1,
+                        }}
+                        transition={SPRING_SNAPPY}
+                        className="rounded-xl border border-slate-200 bg-white p-6 transition-colors hover:border-[#0F5C43]/50"
+                      >
+                        <p className="font-mono-num text-xs font-semibold text-[#0F5C43]">
+                          {service.number}
+                        </p>
+                        <h3 className="font-display mt-2 text-lg font-semibold text-slate-900">
+                          {service.title}
+                        </h3>
+                        <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                          {service.description}
+                        </p>
+                      </motion.article>
+                    );
+                  })}
+                </motion.div>
+              </section>
+
+              {/* Pricing Section: Staging + Fitts large targets + Exaggerated selection feedback */}
+              <section id="pricing" className="border-t border-slate-200 bg-white py-16">
+                <div className="mx-auto max-w-6xl px-4 sm:px-6">
+                  <div className="max-w-2xl">
+                    <h2 className="font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                      Clear pricing, starting from KSh 200
+                    </h2>
+                    <p className="mt-2 text-base text-slate-600">
+                      Start small with a clean WhatsApp & price page, or go for a full website as your business grows. Tap any package to pre-fill your message below.
+                    </p>
                   </div>
 
-                  <a
-                    href="#contact"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleNavigateSection('contact');
-                    }}
-                    className={`mt-6 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors ${
-                      tier.recommended
-                        ? 'bg-[#0F5C43] text-white hover:bg-[#0B4734]'
-                        : 'border border-slate-300 bg-white text-slate-900 hover:bg-slate-50'
-                    }`}
+                  <motion.div
+                    variants={STAGGER_CONTAINER}
+                    initial="hidden"
+                    whileInView="visible"
+                    viewport={{ once: true, amount: 0.15 }}
+                    className="mt-8 grid gap-6 lg:grid-cols-3"
                   >
-                    Ask about {tier.name}
-                  </a>
+                    {PRICING_TIERS.map((tier) => {
+                      const mappedPackage = TIER_TO_PACKAGE[tier.name];
+                      const isSelected = selectedPackage === mappedPackage;
+                      const isHovered = hoveredTier === tier.name;
+                      const isDimmed = hoveredTier !== null && !isHovered;
+
+                      return (
+                        <motion.div
+                          key={tier.name}
+                          variants={ARC_ITEM}
+                          onMouseEnter={() => setHoveredTier(tier.name)}
+                          onMouseLeave={() => setHoveredTier(null)}
+                          animate={{
+                            y: isHovered ? -5 : 0,
+                            scale: isSelected ? 1.01 : 1,
+                            opacity: isDimmed ? 0.75 : 1,
+                          }}
+                          transition={SPRING_EXAGGERATED}
+                          className={`flex flex-col justify-between rounded-xl border p-6 transition-colors ${
+                            isSelected || tier.recommended
+                              ? 'border-[#0F5C43] bg-white ring-1 ring-[#0F5C43]'
+                              : 'border-slate-200 bg-white'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-baseline justify-between gap-2">
+                              <h3 className="font-display text-lg font-bold text-slate-900">
+                                {tier.name}
+                              </h3>
+                              <span className="text-xs text-slate-500 whitespace-nowrap">
+                                {tier.timeline}
+                              </span>
+                            </div>
+                            <p className="font-mono-num mt-3 text-2xl font-bold text-[#0F5C43]">
+                              {tier.price}
+                            </p>
+                            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                              {tier.description}
+                            </p>
+
+                            <ul className="mt-5 space-y-2.5 border-t border-slate-100 pt-5 text-sm text-slate-700">
+                              {tier.items.map((item) => (
+                                <li key={item} className="flex items-start gap-2.5">
+                                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#0F5C43]" />
+                                  <span>{item}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+
+                          <motion.button
+                            type="button"
+                            whileHover={ANTICIPATION_HOVER}
+                            whileTap={SQUASH_TAP}
+                            onClick={() => handleSelectPackage(tier.name)}
+                            className={`mt-6 inline-flex min-h-[48px] w-full cursor-pointer items-center justify-center rounded-lg px-4 py-3 text-sm font-semibold transition-colors ${
+                              tier.recommended || isSelected
+                                ? 'bg-[#0F5C43] text-white hover:bg-[#0B4734]'
+                                : 'border border-slate-300 bg-white text-slate-900 hover:bg-slate-50'
+                            }`}
+                          >
+                            {isSelected ? `Selected · Ask about ${tier.name}` : `Choose ${tier.name}`}
+                          </motion.button>
+                        </motion.div>
+                      );
+                    })}
+                  </motion.div>
+
+                  <p className="mt-5 text-sm text-slate-500">
+                    Note: A custom domain like{' '}
+                    <span className="font-medium text-slate-700">yourshop.co.ke</span> is optional and billed separately at standard registrar cost if you want one. Behind the scenes, I handle hosting, fast mobile loading, and contact forms so you never have to worry about code.
+                  </p>
                 </div>
-              ))}
-            </div>
+              </section>
 
-            <p className="mt-5 text-sm text-slate-500">
-              Note: A custom domain like <span className="font-medium text-slate-700">yourshop.co.ke</span> is optional and billed separately at standard registrar cost if you want one. Behind the scenes, I handle hosting, fast mobile loading, and contact forms so you never have to worry about code.
-            </p>
-          </div>
-        </section>
+              {/* Contact Section */}
+              <section id="contact" className="border-t border-slate-200 bg-slate-100/70 py-16">
+                <div className="mx-auto max-w-3xl px-4 sm:px-6">
+                  <div className="mb-8">
+                    <h2 className="font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                      Tell me about your business
+                    </h2>
+                    <p className="mt-2 text-base text-slate-600">
+                      Share what you do and what you need on your website. I reply personally within the day.
+                    </p>
+                  </div>
+                  <ContactForm selectedPackage={selectedPackage} />
+                </div>
+              </section>
+            </main>
 
-        {/* Contact Section */}
-        <section id="contact" className="border-t border-slate-200 bg-slate-100/70 py-16">
-          <div className="mx-auto max-w-3xl px-4 sm:px-6">
-            <div className="mb-8">
-              <h2 className="font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                Tell me about your business
-              </h2>
-              <p className="mt-2 text-base text-slate-600">
-                Share what you do and what you need on your website. I reply personally within the day.
-              </p>
-            </div>
-            <ContactForm />
-          </div>
-        </section>
-      </main>
+            {/* Quiet Footer */}
+            <footer className="border-t border-slate-200 bg-white py-10">
+              <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-6 px-4 text-sm text-slate-600 sm:flex-row sm:items-center sm:px-6">
+                <div>
+                  <p className="font-display font-semibold text-slate-900">
+                    Summit · Emmanuel Nthiga
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Simple websites for Kenyan businesses · Nairobi
+                  </p>
+                </div>
 
-      {/* Quiet Footer */}
-      <footer className="border-t border-slate-200 bg-white py-10">
-        <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-6 px-4 text-sm text-slate-600 sm:flex-row sm:items-center sm:px-6">
-          <div>
-            <p className="font-display font-semibold text-slate-900">
-              Summit · Emmanuel Nthiga
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              Simple websites for Kenyan businesses · Nairobi
-            </p>
+                <div className="flex flex-wrap items-center gap-5 text-xs sm:text-sm">
+                  <a
+                    href="mailto:emmannthiga25@gmail.com"
+                    className="inline-flex min-h-[44px] items-center hover:text-slate-900 hover:underline underline-offset-4"
+                  >
+                    emmannthiga25@gmail.com
+                  </a>
+                  <a
+                    href="https://instagram.com/summit._digital"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex min-h-[44px] items-center hover:text-slate-900 hover:underline underline-offset-4"
+                  >
+                    @summit._digital
+                  </a>
+                  <button
+                    type="button"
+                    onClick={openInbox}
+                    className="inline-flex min-h-[44px] cursor-pointer items-center text-slate-500 hover:text-slate-900 hover:underline underline-offset-4"
+                  >
+                    Owner sign-in
+                  </button>
+                </div>
+              </div>
+            </footer>
           </div>
-
-          <div className="flex flex-wrap items-center gap-5 text-xs sm:text-sm">
-            <a
-              href="mailto:emmannthiga25@gmail.com"
-              className="hover:text-slate-900 hover:underline underline-offset-4"
-            >
-              emmannthiga25@gmail.com
-            </a>
-            <a
-              href="https://instagram.com/summit._digital"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-slate-900 hover:underline underline-offset-4"
-            >
-              @summit._digital
-            </a>
-          </div>
-        </div>
-      </footer>
-    </div>
+        )}
+      </ErrorBoundary>
+    </MotionConfig>
   );
 }

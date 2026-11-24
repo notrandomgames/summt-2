@@ -1,0 +1,103 @@
+{
+  "entities": {
+    "Inquiry": {
+      "title": "Inquiry",
+      "description": "A website inquiry submitted by a prospective local business client.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the business owner or contact person.",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "contact": {
+          "type": "string",
+          "description": "WhatsApp phone number or email address for reply.",
+          "minLength": 5,
+          "maxLength": 120
+        },
+        "businessType": {
+          "type": "string",
+          "description": "Type and location of the business.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "packageChoice": {
+          "type": "string",
+          "description": "Selected website package tier.",
+          "enum": [
+            "Starter Page (From KSh 200)",
+            "Full Local Business Site (From KSh 4,500)",
+            "Custom Order & Booking Site (From KSh 9,500)",
+            "Not sure yet — help me choose"
+          ],
+          "maxLength": 80
+        },
+        "message": {
+          "type": "string",
+          "description": "Description of what the client needs on their website.",
+          "minLength": 6,
+          "maxLength": 1500
+        },
+        "status": {
+          "type": "string",
+          "description": "Current follow-up status managed by the owner.",
+          "enum": ["new", "replied", "archived"],
+          "maxLength": 20
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the inquiry was submitted."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the inquiry status was last updated."
+        }
+      },
+      "required": [
+        "name",
+        "contact",
+        "businessType",
+        "packageChoice",
+        "message",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "Authorized owner record allowed to view and manage client inquiries.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 150
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["email", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/inquiries/{inquiryId}": {
+      "schema": {
+        "$ref": "#/entities/Inquiry"
+      },
+      "description": "Client website inquiries submitted from the contact form."
+    },
+    "/admins/{adminId}": {
+      "schema": {
+        "$ref": "#/entities/Admin"
+      },
+      "description": "Owner admin accounts authorized to manage inquiries."
+    }
+  }
+}

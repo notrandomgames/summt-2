@@ -1,0 +1,105 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isVerifiedUser() && (
+        request.auth.token.email == 'emmannthiga25@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidPackageChoice(choice) {
+      return choice in [
+        'Starter Page (From KSh 200)',
+        'Full Local Business Site (From KSh 4,500)',
+        'Custom Order & Booking Site (From KSh 9,500)',
+        'Not sure yet — help me choose'
+      ];
+    }
+
+    function isValidInquiry(data) {
+      return data.keys().hasAll([
+          'name',
+          'contact',
+          'businessType',
+          'packageChoice',
+          'message',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'name',
+          'contact',
+          'businessType',
+          'packageChoice',
+          'message',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 100
+        && data.contact is string && data.contact.size() >= 5 && data.contact.size() <= 120
+        && data.businessType is string && data.businessType.size() >= 1 && data.businessType.size() <= 120
+        && data.packageChoice is string && data.packageChoice.size() <= 80 && isValidPackageChoice(data.packageChoice)
+        && data.message is string && data.message.size() >= 6 && data.message.size() <= 1500
+        && data.status is string && data.status.size() <= 20 && data.status in ['new', 'replied', 'archived']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && isValidId(adminId) && request.auth.uid == adminId && isVerifiedUser();
+      allow list, create, update, delete: if false;
+    }
+
+    match /inquiries/{inquiryId} {
+      // PII isolation: only the verified site owner may read or list client inquiries
+      allow get: if isValidId(inquiryId) && isAdmin();
+      allow list: if isAdmin();
+
+      // Public lead capture with strict schema, enum, length, and server-timestamp enforcement
+      allow create: if isValidId(inquiryId)
+        && isValidInquiry(incoming())
+        && incoming().status == 'new'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      // Action-based update: only verified owner can update status & updatedAt; immutable fields locked
+      allow update: if isValidId(inquiryId)
+        && isAdmin()
+        && isValidInquiry(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+
+      allow delete: if isValidId(inquiryId) && isAdmin();
+    }
+  }
+}

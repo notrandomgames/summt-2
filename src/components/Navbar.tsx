@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { Menu, X } from 'lucide-react';
+import { ANTICIPATION_HOVER, EASE_SLOW_IN_OUT, SQUASH_TAP } from '../lib/motionPresets';
 
 interface NavbarProps {
   onNavigateSection: (sectionId: string) => void;
@@ -15,15 +17,17 @@ export function Navbar({ onNavigateSection }: NavbarProps) {
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-slate-50/95 backdrop-blur-sm">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-8 px-4 py-3.5 sm:px-6">
-        {/* Zone 1: Single-element brand wordmark */}
-        <a
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-8 px-4 py-3 sm:px-6">
+        {/* Zone 1: Single-element brand wordmark with larger Fitts hit area */}
+        <motion.a
           href="#top"
           onClick={(e) => {
             e.preventDefault();
             handleLinkClick('top');
           }}
-          className="font-display flex items-center gap-2.5 text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#0F5C43]"
+          whileHover={{ scale: 1.02 }}
+          whileTap={SQUASH_TAP}
+          className="font-display flex min-h-[44px] items-center gap-2.5 px-1 text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#0F5C43]"
         >
           <svg
             className="h-6 w-6 shrink-0"
@@ -43,104 +47,103 @@ export function Navbar({ onNavigateSection }: NavbarProps) {
             />
           </svg>
           <span>summit</span>
-        </a>
+        </motion.a>
 
-        {/* Zone 2: Concise single-line navigation links */}
+        {/* Zone 2: Concise single-line navigation links (Hick's & Jakob's Law) */}
         <nav
           aria-label="Main navigation"
-          className="hidden items-center gap-7 text-sm font-medium text-slate-600 md:flex"
+          className="hidden items-center gap-2 text-sm font-medium text-slate-600 md:flex"
         >
-          <a
-            href="#services"
-            onClick={(e) => {
-              e.preventDefault();
-              handleLinkClick('services');
-            }}
-            className="whitespace-nowrap shrink-0 py-1 transition-colors hover:text-slate-900 hover:underline hover:underline-offset-4"
-          >
-            Services
-          </a>
-          <a
-            href="#pricing"
-            onClick={(e) => {
-              e.preventDefault();
-              handleLinkClick('pricing');
-            }}
-            className="whitespace-nowrap shrink-0 py-1 transition-colors hover:text-slate-900 hover:underline hover:underline-offset-4"
-          >
-            Pricing
-          </a>
-          <a
-            href="#contact"
-            onClick={(e) => {
-              e.preventDefault();
-              handleLinkClick('contact');
-            }}
-            className="whitespace-nowrap shrink-0 py-1 transition-colors hover:text-slate-900 hover:underline hover:underline-offset-4"
-          >
-            Contact
-          </a>
+          {[
+            { id: 'services', label: 'Services' },
+            { id: 'pricing', label: 'Pricing' },
+            { id: 'contact', label: 'Contact' },
+          ].map((item) => (
+            <a
+              key={item.id}
+              href={`#${item.id}`}
+              onClick={(e) => {
+                e.preventDefault();
+                handleLinkClick(item.id);
+              }}
+              className="inline-flex min-h-[44px] items-center rounded-lg px-3.5 whitespace-nowrap shrink-0 transition-colors duration-150 hover:bg-slate-200/50 hover:text-slate-900"
+            >
+              {item.label}
+            </a>
+          ))}
         </nav>
 
-        {/* Zone 3: Single primary action + mobile menu toggle */}
+        {/* Zone 3: Primary CTA with generous Fitts hit area + squash/anticipation */}
         <div className="flex items-center gap-3 shrink-0">
-          <a
+          <motion.a
             href="#contact"
             onClick={(e) => {
               e.preventDefault();
               handleLinkClick('contact');
             }}
-            className="hidden rounded-lg bg-[#0F5C43] px-4 py-2 text-sm font-medium text-white whitespace-nowrap shrink-0 transition-colors hover:bg-[#0B4734] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0F5C43] md:inline-flex"
+            whileHover={ANTICIPATION_HOVER}
+            whileTap={SQUASH_TAP}
+            className="hidden min-h-[44px] items-center rounded-lg bg-[#0F5C43] px-5 py-2.5 text-sm font-semibold text-white whitespace-nowrap shrink-0 transition-colors hover:bg-[#0B4734] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0F5C43] md:inline-flex"
           >
             Message me
-          </a>
+          </motion.a>
 
-          <button
+          <motion.button
             type="button"
+            whileTap={SQUASH_TAP}
             onClick={() => setMobileOpen((prev) => !prev)}
             aria-expanded={mobileOpen}
             aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-800 md:hidden"
+            className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-800 md:hidden"
           >
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
+          </motion.button>
         </div>
       </div>
 
-      {/* Mobile Drawer */}
-      {mobileOpen && (
-        <div className="border-t border-slate-200 bg-white px-4 py-4 md:hidden">
-          <nav aria-label="Mobile navigation" className="flex flex-col gap-1">
-            {[
-              { id: 'services', label: 'Services' },
-              { id: 'pricing', label: 'Pricing' },
-              { id: 'contact', label: 'Contact' },
-            ].map((item) => (
-              <a
-                key={item.id}
-                href={`#${item.id}`}
+      {/* Mobile Drawer with pose-to-pose follow-through */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18, ease: EASE_SLOW_IN_OUT }}
+            className="border-t border-slate-200 bg-white px-4 py-4 md:hidden"
+          >
+            <nav aria-label="Mobile navigation" className="flex flex-col gap-1.5">
+              {[
+                { id: 'services', label: 'Services' },
+                { id: 'pricing', label: 'Pricing' },
+                { id: 'contact', label: 'Contact' },
+              ].map((item) => (
+                <a
+                  key={item.id}
+                  href={`#${item.id}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleLinkClick(item.id);
+                  }}
+                  className="flex min-h-[48px] items-center rounded-lg px-3.5 text-base font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                >
+                  {item.label}
+                </a>
+              ))}
+              <motion.a
+                whileTap={SQUASH_TAP}
+                href="#contact"
                 onClick={(e) => {
                   e.preventDefault();
-                  handleLinkClick(item.id);
+                  handleLinkClick('contact');
                 }}
-                className="flex min-h-[44px] items-center rounded-md px-3 text-base font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                className="mt-2 flex min-h-[48px] items-center justify-center rounded-lg bg-[#0F5C43] px-4 py-3 text-base font-semibold text-white hover:bg-[#0B4734]"
               >
-                {item.label}
-              </a>
-            ))}
-            <a
-              href="#contact"
-              onClick={(e) => {
-                e.preventDefault();
-                handleLinkClick('contact');
-              }}
-              className="mt-2 flex min-h-[44px] items-center justify-center rounded-lg bg-[#0F5C43] px-4 py-2.5 text-base font-medium text-white hover:bg-[#0B4734]"
-            >
-              Message me
-            </a>
-          </nav>
-        </div>
-      )}
+                Message me
+              </motion.a>
+            </nav>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </header>
   );
 }
