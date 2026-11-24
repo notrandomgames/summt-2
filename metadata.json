@@ -1,0 +1,6 @@
+{
+  "name": "Summit — Websites by Emmanuel Nthiga",
+  "description": "Simple, mobile-friendly websites for Kenyan local businesses starting from KSh 200, with WhatsApp booking, Google Maps, and M-Pesa readiness.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
