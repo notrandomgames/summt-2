@@ -1,3 +1,76 @@
+export const CONTACT_INFO = {
+  ownerName: 'Emmanuel Nthiga',
+  brandName: 'Summit',
+  city: 'Nairobi, Kenya',
+  phoneDisplay: '0700 000 000',
+  phoneHref: 'tel:+254700000000',
+  whatsappNumber: '254700000000',
+  email: 'emmannthiga25@gmail.com',
+  instagramHandle: '@summit._digital',
+  instagramUrl: 'https://instagram.com/summit._digital',
+} as const;
+
+export function getWhatsAppUrl(prefillText?: string): string {
+  const text =
+    prefillText ??
+    'Hi Emmanuel, I saw your website and I would like to ask about a website for my business.';
+  return `https://wa.me/${CONTACT_INFO.whatsappNumber}?text=${encodeURIComponent(text)}`;
+}
+
+export type SampleSlug = 'salon' | 'barbershop' | 'caterer';
+
+export interface SampleProjectMeta {
+  slug: SampleSlug;
+  title: string;
+  category: 'beauty' | 'food';
+  categoryLabel: string;
+  location: string;
+  image: string;
+  imageAlt: string;
+  summary: string;
+  includedFeatures: string[];
+}
+
+export const SAMPLE_PROJECTS: SampleProjectMeta[] = [
+  {
+    slug: 'salon',
+    title: 'Zuri Hair & Beauty Salon',
+    category: 'beauty',
+    categoryLabel: 'Sample project · Salon',
+    location: 'Kilimani, Nairobi',
+    image: '/src/assets/images/demo_salon_1795541847197.jpg',
+    imageAlt:
+      'Interior of Zuri Hair & Beauty Salon in Kilimani with styling mirrors and natural hair products',
+    summary:
+      'A mobile-friendly salon page with a full KSh price menu for braids, silk press, and nails, plus one-tap WhatsApp booking and M-Pesa Till details.',
+    includedFeatures: ['KSh price list', 'WhatsApp booking', 'M-Pesa Till copy', 'Google Maps pin'],
+  },
+  {
+    slug: 'barbershop',
+    title: 'Kicks & Clips Barbershop',
+    category: 'beauty',
+    categoryLabel: 'Sample project · Barbershop',
+    location: 'Westlands, Nairobi',
+    image: '/src/assets/images/demo_barbershop_1795541847917.jpg',
+    imageAlt: 'Clean barbershop interior in Nairobi with leather chairs and wooden counters',
+    summary:
+      'Built for walk-ins and regulars to check fade and beard trim prices, pick a free time slot, and reserve their chair on WhatsApp.',
+    includedFeatures: ['Grooming menu', 'Time slot picker', 'WhatsApp booking', 'M-Pesa Till copy'],
+  },
+  {
+    slug: 'caterer',
+    title: 'Mama Wanjiku Kitchen & Catering',
+    category: 'food',
+    categoryLabel: 'Sample project · Catering',
+    location: 'Nairobi & Kiambu',
+    image: '/src/assets/images/demo_caterer_1795541848643.jpg',
+    imageAlt: 'Kenyan catering spread with beef pilau, nyama choma, chapatis, and kachumbari',
+    summary:
+      'An event and office-lunch site where clients pick a menu, enter their guest count, see the KSh estimate immediately, and send the order on WhatsApp.',
+    includedFeatures: ['Event menu', 'Guest cost calculator', 'WhatsApp order', 'Delivery zones'],
+  },
+];
+
 export interface ServiceItem {
   number: string;
   title: string;

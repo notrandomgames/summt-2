@@ -18,7 +18,7 @@ export function Navbar({ onNavigateSection }: NavbarProps) {
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-slate-50/95 backdrop-blur-sm">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-8 px-4 py-3 sm:px-6">
-        {/* Zone 1: Single-element brand wordmark with larger Fitts hit area */}
+        {/* Zone 1: Single-element brand wordmark */}
         <motion.a
           href="#top"
           onClick={(e) => {
@@ -49,13 +49,14 @@ export function Navbar({ onNavigateSection }: NavbarProps) {
           <span>summit</span>
         </motion.a>
 
-        {/* Zone 2: Concise single-line navigation links (Hick's & Jakob's Law) */}
+        {/* Zone 2: Concise single-line navigation links */}
         <nav
           aria-label="Main navigation"
           className="hidden items-center gap-2 text-sm font-medium text-slate-600 md:flex"
         >
           {[
             { id: 'services', label: 'Services' },
+            { id: 'work', label: 'Samples' },
             { id: 'pricing', label: 'Pricing' },
             { id: 'contact', label: 'Contact' },
           ].map((item) => (
@@ -73,7 +74,7 @@ export function Navbar({ onNavigateSection }: NavbarProps) {
           ))}
         </nav>
 
-        {/* Zone 3: Primary CTA with generous Fitts hit area + squash/anticipation */}
+        {/* Zone 3: Single primary action + mobile menu toggle */}
         <div className="flex items-center gap-3 shrink-0">
           <motion.a
             href="#contact"
@@ -101,7 +102,7 @@ export function Navbar({ onNavigateSection }: NavbarProps) {
         </div>
       </div>
 
-      {/* Mobile Drawer with pose-to-pose follow-through */}
+      {/* Mobile Drawer */}
       <AnimatePresence>
         {mobileOpen && (
           <motion.div
@@ -114,6 +115,7 @@ export function Navbar({ onNavigateSection }: NavbarProps) {
             <nav aria-label="Mobile navigation" className="flex flex-col gap-1.5">
               {[
                 { id: 'services', label: 'Services' },
+                { id: 'work', label: 'Samples' },
                 { id: 'pricing', label: 'Pricing' },
                 { id: 'contact', label: 'Contact' },
               ].map((item) => (

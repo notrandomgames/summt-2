@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { Check, CheckCircle2, Mail, MessageCircle } from 'lucide-react';
+import { Check, CheckCircle2, Mail, MessageCircle, Phone } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { CONTACT_INFO, getWhatsAppUrl } from '../data/samples';
 import {
   ANTICIPATION_HOVER,
   EASE_SLOW_IN_OUT,
@@ -146,7 +147,7 @@ export function ContactForm({ selectedPackage }: ContactFormProps) {
       setSubmitted(inquiryData);
     } catch (error) {
       setErrorMsg(
-        'Could not save your message right now. Please try again or email emmannthiga25@gmail.com directly.'
+        `Could not save your message right now. Please message me on WhatsApp or call ${CONTACT_INFO.phoneDisplay}.`
       );
       try {
         handleFirestoreError(error, OperationType.CREATE, path);
@@ -163,11 +164,11 @@ export function ContactForm({ selectedPackage }: ContactFormProps) {
     const body = encodeURIComponent(
       `Hi Emmanuel,\n\nName: ${data.name}\nContact: ${data.contact}\nBusiness: ${data.businessType}\nPackage: ${data.packageChoice}\n\nDetails:\n${data.message}`
     );
-    return `mailto:emmannthiga25@gmail.com?subject=${subject}&body=${body}`;
+    return `mailto:${CONTACT_INFO.email}?subject=${subject}&body=${body}`;
   };
 
-  const buildWhatsAppText = (data: SavedInquiry) => {
-    return encodeURIComponent(
+  const buildWhatsAppHref = (data: SavedInquiry) => {
+    return getWhatsAppUrl(
       `Hi Emmanuel, I'm ${data.name} (${data.businessType}). I'm interested in the ${data.packageChoice}. ${data.message}`
     );
   };
@@ -184,7 +185,6 @@ export function ContactForm({ selectedPackage }: ContactFormProps) {
           className="rounded-xl border border-[#0F5C43]/30 bg-white p-6 shadow-sm sm:p-8"
         >
           <div className="flex items-start gap-3.5">
-            {/* Secondary action + exaggerated checkmark pop */}
             <motion.div
               initial={{ scale: 0, rotate: -25 }}
               animate={{ scale: 1, rotate: 0 }}
@@ -197,7 +197,7 @@ export function ContactForm({ selectedPackage }: ContactFormProps) {
                 Thanks, {submitted.name}. Your message is saved.
               </h3>
               <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
-                I will reply via <span className="font-medium text-slate-800">{submitted.contact}</span>. You can also send a quick follow-up via email or WhatsApp below.
+                I will reply via <span className="font-medium text-slate-800">{submitted.contact}</span>. You can also message me directly on WhatsApp or call <span className="font-mono-num font-medium text-slate-800">{CONTACT_INFO.phoneDisplay}</span>.
               </p>
             </div>
           </div>
@@ -219,22 +219,22 @@ export function ContactForm({ selectedPackage }: ContactFormProps) {
             <motion.a
               whileHover={ANTICIPATION_HOVER}
               whileTap={SQUASH_TAP}
-              href={buildMailtoHref(submitted)}
+              href={buildWhatsAppHref(submitted)}
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex min-h-[48px] items-center gap-2 rounded-lg bg-[#0F5C43] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#0B4734]"
             >
-              <Mail className="h-4 w-4" />
-              Email emmannthiga25@gmail.com
+              <MessageCircle className="h-4 w-4" />
+              Send on WhatsApp
             </motion.a>
             <motion.a
               whileHover={ANTICIPATION_HOVER}
               whileTap={SQUASH_TAP}
-              href={`https://wa.me/?text=${buildWhatsAppText(submitted)}`}
-              target="_blank"
-              rel="noopener noreferrer"
+              href={buildMailtoHref(submitted)}
               className="inline-flex min-h-[48px] items-center gap-2 rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-50"
             >
-              <MessageCircle className="h-4 w-4 text-[#0F5C43]" />
-              Share via WhatsApp
+              <Mail className="h-4 w-4" />
+              Email me
             </motion.a>
             <motion.button
               whileTap={SQUASH_TAP}
@@ -384,25 +384,41 @@ export function ContactForm({ selectedPackage }: ContactFormProps) {
           </AnimatePresence>
 
           <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
-            <motion.button
-              type="submit"
-              disabled={submitting}
-              onPointerDown={() => setSubmitPressed(true)}
-              onPointerUp={() => setSubmitPressed(false)}
-              onPointerLeave={() => setSubmitPressed(false)}
-              whileHover={submitting ? undefined : ANTICIPATION_HOVER}
-              whileTap={submitting ? undefined : SQUASH_TAP}
-              animate={submitPressed ? { scaleX: 1.03, scaleY: 0.95 } : { scaleX: 1, scaleY: 1 }}
-              transition={SPRING_SNAPPY}
-              className="inline-flex min-h-[50px] w-full cursor-pointer items-center justify-center rounded-lg bg-[#0F5C43] px-7 py-3 text-base font-semibold text-white transition-colors hover:bg-[#0B4734] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0F5C43] sm:w-auto"
-            >
-              {submitting ? 'Sending...' : 'Send message to Emmanuel'}
-            </motion.button>
+            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+              <motion.button
+                type="submit"
+                disabled={submitting}
+                onPointerDown={() => setSubmitPressed(true)}
+                onPointerUp={() => setSubmitPressed(false)}
+                onPointerLeave={() => setSubmitPressed(false)}
+                whileHover={submitting ? undefined : ANTICIPATION_HOVER}
+                whileTap={submitting ? undefined : SQUASH_TAP}
+                animate={submitPressed ? { scaleX: 1.03, scaleY: 0.95 } : { scaleX: 1, scaleY: 1 }}
+                transition={SPRING_SNAPPY}
+                className="inline-flex min-h-[50px] w-full cursor-pointer items-center justify-center rounded-lg bg-[#0F5C43] px-7 py-3 text-base font-semibold text-white transition-colors hover:bg-[#0B4734] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0F5C43] sm:w-auto"
+              >
+                {submitting ? 'Sending...' : 'Send message to Emmanuel'}
+              </motion.button>
+
+              <motion.a
+                whileHover={ANTICIPATION_HOVER}
+                whileTap={SQUASH_TAP}
+                href={getWhatsAppUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-50 sm:w-auto"
+              >
+                <MessageCircle className="h-4 w-4 text-[#0F5C43]" />
+                WhatsApp me directly
+              </motion.a>
+            </div>
+
             <a
-              href="mailto:emmannthiga25@gmail.com"
-              className="inline-flex min-h-[44px] items-center text-sm font-medium text-slate-600 underline underline-offset-4 hover:text-slate-900"
+              href={CONTACT_INFO.phoneHref}
+              className="inline-flex min-h-[44px] items-center gap-1.5 text-sm font-medium text-slate-700 hover:text-slate-900"
             >
-              Or email emmannthiga25@gmail.com
+              <Phone className="h-4 w-4 text-[#0F5C43]" />
+              <span className="font-mono-num">{CONTACT_INFO.phoneDisplay}</span>
             </a>
           </div>
         </motion.form>
