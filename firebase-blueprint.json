@@ -36,7 +36,7 @@
         },
         "message": {
           "type": "string",
-          "description": "Description of what the client needs on their website.",
+          "description": "Initial message describing what the client needs on their website.",
           "minLength": 6,
           "maxLength": 1500
         },
@@ -45,6 +45,13 @@
           "description": "Current follow-up status managed by the owner.",
           "enum": ["new", "replied", "archived"],
           "maxLength": 20
+        },
+        "threadId": {
+          "type": "string",
+          "description": "Unguessable token ID linking this inquiry to its two-way message thread.",
+          "minLength": 28,
+          "maxLength": 64,
+          "pattern": "^thr_[a-f0-9]+$"
         },
         "createdAt": {
           "type": "string",
@@ -64,9 +71,121 @@
         "packageChoice",
         "message",
         "status",
+        "threadId",
         "createdAt",
         "updatedAt"
       ]
+    },
+    "Thread": {
+      "title": "Thread",
+      "description": "Capability-keyed two-way conversation summary without phone or email PII.",
+      "type": "object",
+      "properties": {
+        "inquiryId": {
+          "type": "string",
+          "description": "Parent inquiry document ID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "clientName": {
+          "type": "string",
+          "description": "Display name of the client.",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "businessType": {
+          "type": "string",
+          "description": "Type and location of the business.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "packageChoice": {
+          "type": "string",
+          "description": "Selected website package tier.",
+          "enum": [
+            "Starter Page (From KSh 200)",
+            "Full Local Business Site (From KSh 300)",
+            "Custom Order & Booking Site (From KSh 500)",
+            "Not sure yet — help me choose"
+          ],
+          "maxLength": 80
+        },
+        "status": {
+          "type": "string",
+          "description": "Conversation follow-up status.",
+          "enum": ["new", "replied", "archived"],
+          "maxLength": 20
+        },
+        "lastMessagePreview": {
+          "type": "string",
+          "description": "Short preview of the latest message in the thread.",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "lastMessageBy": {
+          "type": "string",
+          "description": "Who sent the most recent message.",
+          "enum": ["client", "owner"],
+          "maxLength": 20
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "inquiryId",
+        "clientName",
+        "businessType",
+        "packageChoice",
+        "status",
+        "lastMessagePreview",
+        "lastMessageBy",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ThreadMessage": {
+      "title": "ThreadMessage",
+      "description": "A saved message inside a two-way conversation between the client and Emman.",
+      "type": "object",
+      "properties": {
+        "threadId": {
+          "type": "string",
+          "description": "Parent thread token ID for query isolation.",
+          "minLength": 28,
+          "maxLength": 64,
+          "pattern": "^thr_[a-f0-9]+$"
+        },
+        "senderRole": {
+          "type": "string",
+          "description": "Whether this message was sent by the client or Emman (owner).",
+          "enum": ["client", "owner"],
+          "maxLength": 20
+        },
+        "senderName": {
+          "type": "string",
+          "description": "Display name shown on the message.",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "body": {
+          "type": "string",
+          "description": "Message text content.",
+          "minLength": 1,
+          "maxLength": 1500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["threadId", "senderRole", "senderName", "body", "createdAt"]
     },
     "Admin": {
       "title": "Admin",
@@ -91,7 +210,19 @@
       "schema": {
         "$ref": "#/entities/Inquiry"
       },
-      "description": "Client website inquiries submitted from the contact form."
+      "description": "Client website inquiries with private contact PII readable only by the verified owner."
+    },
+    "/threads/{threadId}": {
+      "schema": {
+        "$ref": "#/entities/Thread"
+      },
+      "description": "Capability-keyed two-way conversation headers linking clients and Emman without exposing phone/email PII."
+    },
+    "/threads/{threadId}/messages/{messageId}": {
+      "schema": {
+        "$ref": "#/entities/ThreadMessage"
+      },
+      "description": "Saved chronological replies between a client and Emman."
     },
     "/admins/{adminId}": {
       "schema": {

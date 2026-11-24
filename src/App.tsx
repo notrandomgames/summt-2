@@ -5,15 +5,17 @@
 
 import { useEffect, useState } from 'react';
 import { motion, MotionConfig } from 'motion/react';
-import { ArrowRight, Check, ExternalLink, MessageCircle, Phone } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ExternalLink, MessageCircle, Phone } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { HeroPreviewCard } from './components/HeroPreviewCard';
 import { ContactForm, PACKAGE_OPTIONS } from './components/ContactForm';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { OwnerInbox } from './components/OwnerInbox';
+import { ThreadConversation } from './components/ThreadConversation';
 import { SampleSalonPage } from './components/SampleSalonPage';
 import { SampleBarbershopPage } from './components/SampleBarbershopPage';
 import { SampleCatererPage } from './components/SampleCatererPage';
+import { isValidThreadToken } from './lib/threads';
 import {
   CONTACT_INFO,
   getWhatsAppUrl,
@@ -46,8 +48,23 @@ function parseDemoFromHash(hash: string): SampleSlug | null {
   return null;
 }
 
+function parseThreadFromLocation(): string | null {
+  if (typeof window === 'undefined') return null;
+  const hash = window.location.hash;
+  if (hash.startsWith('#/thread/')) {
+    const candidate = hash.slice('#/thread/'.length).split(/[?#]/)[0];
+    return isValidThreadToken(candidate) ? candidate : null;
+  }
+  const param = new URLSearchParams(window.location.search).get('thread');
+  if (param && isValidThreadToken(param)) return param;
+  return null;
+}
+
 export default function App() {
   const [showInbox, setShowInbox] = useState(() => window.location.hash === '#/inbox');
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(() =>
+    parseThreadFromLocation()
+  );
   const [activeSample, setActiveSample] = useState<SampleSlug | null>(() =>
     parseDemoFromHash(window.location.hash)
   );
@@ -60,9 +77,11 @@ export default function App() {
   useEffect(() => {
     const onHashChange = () => {
       setShowInbox(window.location.hash === '#/inbox');
+      const nextThread = parseThreadFromLocation();
+      setActiveThreadId(nextThread);
       const nextSample = parseDemoFromHash(window.location.hash);
       setActiveSample(nextSample);
-      if (nextSample) {
+      if (nextSample || nextThread) {
         window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
       }
     };
@@ -113,6 +132,12 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
   };
 
+  const closeThread = () => {
+    window.location.hash = '';
+    setActiveThreadId(null);
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+  };
+
   const visibleSamples =
     workFilter === 'all'
       ? SAMPLE_PROJECTS
@@ -120,6 +145,45 @@ export default function App() {
 
   const renderPage = () => {
     if (showInbox) return <OwnerInbox onBack={closeInbox} />;
+    if (activeThreadId) {
+      return (
+        <div className="min-h-screen bg-slate-50 text-slate-900">
+          <header className="border-b border-slate-200 bg-white">
+            <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
+              <button
+                type="button"
+                onClick={closeThread}
+                className="inline-flex min-h-[40px] cursor-pointer items-center gap-2 text-sm font-medium text-slate-700 hover:text-slate-900"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to Summit Digital
+              </button>
+              <span className="text-xs font-medium text-[#0F5C43]">
+                {CONTACT_INFO.brandName} · Built by {CONTACT_INFO.ownerName}
+              </span>
+            </div>
+          </header>
+          <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+            <h1 className="font-display mb-2 text-2xl font-bold text-slate-900">
+              Your messages with Emman
+            </h1>
+            <p className="mb-6 text-sm text-slate-600">
+              Your conversation stays saved here. Send a reply anytime or bookmark this link to check back later.
+            </p>
+            <ThreadConversation
+              threadId={activeThreadId}
+              onStartNewInquiry={() => {
+                window.location.hash = '#contact';
+                setActiveThreadId(null);
+                setTimeout(() => {
+                  document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
+                }, 60);
+              }}
+            />
+          </main>
+        </div>
+      );
+    }
     if (activeSample === 'salon') return <SampleSalonPage onBack={closeSample} />;
     if (activeSample === 'barbershop') return <SampleBarbershopPage onBack={closeSample} />;
     if (activeSample === 'caterer') return <SampleCatererPage onBack={closeSample} />;

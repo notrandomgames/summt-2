@@ -11,6 +11,10 @@ service cloud.firestore {
       return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
+    function isValidThreadToken(id) {
+      return id is string && id.size() >= 28 && id.size() <= 64 && id.matches('^thr_[a-f0-9]+$');
+    }
+
     function incoming() {
       return request.resource.data;
     }
@@ -62,6 +66,7 @@ service cloud.firestore {
           'packageChoice',
           'message',
           'status',
+          'threadId',
           'createdAt',
           'updatedAt'
         ])
@@ -71,8 +76,65 @@ service cloud.firestore {
         && data.packageChoice is string && data.packageChoice.size() <= 80 && isValidPackageChoice(data.packageChoice)
         && data.message is string && data.message.size() >= 6 && data.message.size() <= 1500
         && data.status is string && data.status.size() <= 20 && data.status in ['new', 'replied', 'archived']
+        && (!('threadId' in data.keys()) || isValidThreadToken(data.threadId))
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
+    }
+
+    function isValidThread(data) {
+      return data.keys().hasAll([
+          'inquiryId',
+          'clientName',
+          'businessType',
+          'packageChoice',
+          'status',
+          'lastMessagePreview',
+          'lastMessageBy',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'inquiryId',
+          'clientName',
+          'businessType',
+          'packageChoice',
+          'status',
+          'lastMessagePreview',
+          'lastMessageBy',
+          'createdAt',
+          'updatedAt'
+        ])
+        && isValidId(data.inquiryId)
+        && data.clientName is string && data.clientName.size() >= 2 && data.clientName.size() <= 100
+        && data.businessType is string && data.businessType.size() >= 1 && data.businessType.size() <= 120
+        && data.packageChoice is string && data.packageChoice.size() <= 80 && isValidPackageChoice(data.packageChoice)
+        && data.status is string && data.status.size() <= 20 && data.status in ['new', 'replied', 'archived']
+        && data.lastMessagePreview is string && data.lastMessagePreview.size() >= 1 && data.lastMessagePreview.size() <= 200
+        && data.lastMessageBy is string && data.lastMessageBy.size() <= 20 && data.lastMessageBy in ['client', 'owner']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidThreadMessage(data) {
+      return data.keys().hasAll([
+          'threadId',
+          'senderRole',
+          'senderName',
+          'body',
+          'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'threadId',
+          'senderRole',
+          'senderName',
+          'body',
+          'createdAt'
+        ])
+        && isValidThreadToken(data.threadId)
+        && data.senderRole is string && data.senderRole.size() <= 20 && data.senderRole in ['client', 'owner']
+        && data.senderName is string && data.senderName.size() >= 2 && data.senderName.size() <= 100
+        && data.body is string && data.body.size() >= 1 && data.body.size() <= 1500
+        && data.createdAt is timestamp;
     }
 
     match /admins/{adminId} {
@@ -85,22 +147,78 @@ service cloud.firestore {
       allow get: if isValidId(inquiryId) && isAdmin();
       allow list: if isAdmin();
 
-      // Public lead capture with strict schema, enum, length, and server-timestamp enforcement
+      // Public lead capture with atomic thread creation and server-timestamp enforcement
       allow create: if isValidId(inquiryId)
         && isValidInquiry(incoming())
+        && 'threadId' in incoming().keys()
         && incoming().status == 'new'
         && incoming().createdAt == request.time
-        && incoming().updatedAt == request.time;
+        && incoming().updatedAt == request.time
+        && existsAfter(/databases/$(database)/documents/threads/$(incoming().threadId));
 
-      // Action-based update: only verified owner can update status & updatedAt; immutable fields locked
+      // Owner can update status or attach a threadId once to legacy inquiries
       allow update: if isValidId(inquiryId)
         && isAdmin()
         && isValidInquiry(incoming())
-        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) ||
+          (!('threadId' in existing().keys()) && incoming().diff(existing()).affectedKeys().hasOnly(['threadId', 'status', 'updatedAt']))
+        )
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time;
 
       allow delete: if isValidId(inquiryId) && isAdmin();
+    }
+
+    match /threads/{threadId} {
+      // Unguessable 128-bit thread token grants direct get access without exposing PII or list enumeration
+      allow get: if isValidThreadToken(threadId);
+      allow list: if isAdmin();
+
+      allow create: if isValidThreadToken(threadId)
+        && isValidThread(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (
+          (isAdmin() && incoming().lastMessageBy == 'owner') ||
+          (
+            incoming().status == 'new'
+            && incoming().lastMessageBy == 'client'
+            && existsAfter(/databases/$(database)/documents/inquiries/$(incoming().inquiryId))
+          )
+        );
+
+      allow update: if isValidThreadToken(threadId)
+        && isValidThread(incoming())
+        && incoming().inquiryId == existing().inquiryId
+        && incoming().clientName == existing().clientName
+        && incoming().businessType == existing().businessType
+        && incoming().packageChoice == existing().packageChoice
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'lastMessagePreview', 'lastMessageBy', 'updatedAt'])) ||
+          (incoming().diff(existing()).affectedKeys().hasOnly(['lastMessagePreview', 'lastMessageBy', 'updatedAt']) && incoming().lastMessageBy == 'client')
+        );
+
+      allow delete: if isValidThreadToken(threadId) && isAdmin();
+
+      match /messages/{messageId} {
+        allow get: if isValidId(messageId) && (isAdmin() || isValidThreadToken(threadId));
+        allow list: if isAdmin() || (isValidThreadToken(threadId) && resource.data.threadId == threadId);
+
+        allow create: if isValidId(messageId)
+          && isValidThreadMessage(incoming())
+          && incoming().threadId == threadId
+          && incoming().createdAt == request.time
+          && (
+            (incoming().senderRole == 'owner' && isAdmin()) ||
+            (incoming().senderRole == 'client' && isValidThreadToken(threadId) && existsAfter(/databases/$(database)/documents/threads/$(threadId)))
+          );
+
+        allow update: if false;
+        allow delete: if isValidId(messageId) && isAdmin();
+      }
     }
   }
 }

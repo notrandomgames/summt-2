@@ -1,9 +1,18 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { Check, CheckCircle2, Mail, MessageCircle, Phone } from 'lucide-react';
+import { doc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { Check, MessageCircle, MessageSquare, Phone, Plus } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { CONTACT_INFO, getWhatsAppUrl } from '../data/samples';
+import {
+  buildPreview,
+  createMessageId,
+  createThreadToken,
+  loadSavedClientThreads,
+  saveClientThreadRef,
+  type SavedClientThreadRef,
+} from '../lib/threads';
+import { ThreadConversation } from './ThreadConversation';
 import {
   ANTICIPATION_HOVER,
   EASE_SLOW_IN_OUT,
@@ -18,6 +27,7 @@ interface SavedInquiry {
   businessType: string;
   packageChoice: string;
   message: string;
+  threadId: string;
 }
 
 export const PACKAGE_OPTIONS = [
@@ -29,6 +39,8 @@ export const PACKAGE_OPTIONS = [
 
 interface ContactFormProps {
   selectedPackage?: string;
+  initialThreadId?: string | null;
+  onSavedThreadsChange?: (threads: SavedClientThreadRef[]) => void;
 }
 
 function createInquiryId(): string {
@@ -74,7 +86,19 @@ function normalizeContactInput(raw: string): { valid: boolean; normalized: strin
   };
 }
 
-export function ContactForm({ selectedPackage }: ContactFormProps) {
+export function ContactForm({
+  selectedPackage,
+  initialThreadId,
+  onSavedThreadsChange,
+}: ContactFormProps) {
+  const [savedThreads, setSavedThreads] = useState<SavedClientThreadRef[]>(() =>
+    loadSavedClientThreads()
+  );
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(() => {
+    if (initialThreadId) return initialThreadId;
+    const existing = loadSavedClientThreads();
+    return existing.length > 0 ? existing[0].threadId : null;
+  });
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
   const [businessType, setBusinessType] = useState('');
@@ -86,7 +110,7 @@ export function ContactForm({ selectedPackage }: ContactFormProps) {
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [submitted, setSubmitted] = useState<SavedInquiry | null>(null);
+  const [lastSubmitted, setLastSubmitted] = useState<SavedInquiry | null>(null);
   const [submitPressed, setSubmitPressed] = useState(false);
 
   useEffect(() => {
@@ -95,8 +119,16 @@ export function ContactForm({ selectedPackage }: ContactFormProps) {
       PACKAGE_OPTIONS.includes(selectedPackage as (typeof PACKAGE_OPTIONS)[number])
     ) {
       setPackageChoice(selectedPackage);
+      // If user clicked a pricing tier button, switch to the form so they can send a message for it
+      setActiveThreadId(null);
     }
   }, [selectedPackage]);
+
+  useEffect(() => {
+    if (initialThreadId) {
+      setActiveThreadId(initialThreadId);
+    }
+  }, [initialThreadId]);
 
   const contactStatus = contact.trim() ? normalizeContactInput(contact) : null;
 
@@ -127,6 +159,8 @@ export function ContactForm({ selectedPackage }: ContactFormProps) {
     setSubmitting(true);
 
     const inquiryId = createInquiryId();
+    const threadId = createThreadToken();
+    const initialMsgId = createMessageId('0_init');
     const path = `inquiries/${inquiryId}`;
 
     const inquiryData: SavedInquiry = {
@@ -135,16 +169,57 @@ export function ContactForm({ selectedPackage }: ContactFormProps) {
       businessType: trimmedBusiness,
       packageChoice,
       message: trimmedMessage,
+      threadId,
     };
 
     try {
-      await setDoc(doc(db, 'inquiries', inquiryId), {
-        ...inquiryData,
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'inquiries', inquiryId), {
+        name: trimmedName,
+        contact: trimmedContact,
+        businessType: trimmedBusiness,
+        packageChoice,
+        message: trimmedMessage,
+        threadId,
         status: 'new',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
-      setSubmitted(inquiryData);
+      batch.set(doc(db, 'threads', threadId), {
+        inquiryId,
+        clientName: trimmedName,
+        businessType: trimmedBusiness,
+        packageChoice,
+        status: 'new',
+        lastMessagePreview: buildPreview(trimmedMessage),
+        lastMessageBy: 'client',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      batch.set(doc(db, 'threads', threadId, 'messages', initialMsgId), {
+        threadId,
+        senderRole: 'client',
+        senderName: trimmedName,
+        body: trimmedMessage,
+        createdAt: serverTimestamp(),
+      });
+
+      await batch.commit();
+
+      const nextSaved = saveClientThreadRef({
+        threadId,
+        clientName: trimmedName,
+        businessType: trimmedBusiness,
+        savedAt: Date.now(),
+      });
+      setSavedThreads(nextSaved);
+      onSavedThreadsChange?.(nextSaved);
+      setLastSubmitted(inquiryData);
+      setActiveThreadId(threadId);
+      setName('');
+      setContact('');
+      setBusinessType('');
+      setMessage('');
     } catch (error) {
       setErrorMsg(
         `Could not save your message right now. Please message me on WhatsApp or call ${CONTACT_INFO.phoneDisplay}.`
@@ -159,101 +234,78 @@ export function ContactForm({ selectedPackage }: ContactFormProps) {
     }
   };
 
-  const buildMailtoHref = (data: SavedInquiry) => {
-    const subject = encodeURIComponent(`Website inquiry from ${data.name} (${data.businessType})`);
-    const body = encodeURIComponent(
-      `Hi Emman,\n\nName: ${data.name}\nContact: ${data.contact}\nBusiness: ${data.businessType}\nPackage: ${data.packageChoice}\n\nDetails:\n${data.message}`
-    );
-    return `mailto:${CONTACT_INFO.email}?subject=${subject}&body=${body}`;
-  };
-
-  const buildWhatsAppHref = (data: SavedInquiry) => {
-    return getWhatsAppUrl(
-      `Hi Emman, I'm ${data.name} (${data.businessType}). I'm interested in the ${data.packageChoice}. ${data.message}`
-    );
-  };
+  const activeSavedMeta = savedThreads.find((t) => t.threadId === activeThreadId) ?? null;
 
   return (
-    <AnimatePresence mode="wait">
-      {submitted ? (
-        <motion.div
-          key="submitted-card"
-          initial={{ opacity: 0, scale: 0.95, y: 14 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.96 }}
-          transition={SPRING_EXAGGERATED}
-          className="rounded-xl border border-[#0F5C43]/30 bg-white p-6 shadow-sm sm:p-8"
-        >
-          <div className="flex items-start gap-3.5">
-            <motion.div
-              initial={{ scale: 0, rotate: -25 }}
-              animate={{ scale: 1, rotate: 0 }}
-              transition={{ ...SPRING_EXAGGERATED, delay: 0.08 }}
-            >
-              <CheckCircle2 className="mt-0.5 h-7 w-7 shrink-0 text-[#0F5C43]" />
-            </motion.div>
-            <div>
-              <h3 className="font-display text-lg font-semibold text-slate-900">
-                Thanks, {submitted.name}. Your message is saved.
-              </h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
-                I will reply via <span className="font-medium text-slate-800">{submitted.contact}</span>. You can also message me directly on WhatsApp or call <span className="font-mono-num font-medium text-slate-800">{CONTACT_INFO.phoneDisplay}</span>.
-              </p>
-            </div>
+    <div className="space-y-4">
+      {savedThreads.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+              <MessageSquare className="h-3.5 w-3.5 text-[#0F5C43]" />
+              Your saved messages:
+            </span>
+            {savedThreads.map((item) => {
+              const isSelected = activeThreadId === item.threadId;
+              return (
+                <button
+                  key={item.threadId}
+                  type="button"
+                  onClick={() => setActiveThreadId(item.threadId)}
+                  className={`cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                    isSelected
+                      ? 'bg-[#0F5C43] text-white'
+                      : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  {item.businessType}
+                </button>
+              );
+            })}
           </div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25, delay: 0.14, ease: EASE_SLOW_IN_OUT }}
-            className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700"
-          >
-            <p className="font-medium text-slate-900">
-              {submitted.businessType} · {submitted.packageChoice}
-            </p>
-            <p className="mt-1 text-slate-600">{submitted.message}</p>
-            <p className="mt-2 text-xs text-slate-500">Reply to: {submitted.contact}</p>
-          </motion.div>
-
-          <div className="mt-5 flex flex-wrap items-center gap-3">
-            <motion.a
-              whileHover={ANTICIPATION_HOVER}
-              whileTap={SQUASH_TAP}
-              href={buildWhatsAppHref(submitted)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex min-h-[48px] items-center gap-2 rounded-lg bg-[#0F5C43] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#0B4734]"
-            >
-              <MessageCircle className="h-4 w-4" />
-              Send on WhatsApp
-            </motion.a>
-            <motion.a
-              whileHover={ANTICIPATION_HOVER}
-              whileTap={SQUASH_TAP}
-              href={buildMailtoHref(submitted)}
-              className="inline-flex min-h-[48px] items-center gap-2 rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-50"
-            >
-              <Mail className="h-4 w-4" />
-              Email me
-            </motion.a>
-            <motion.button
-              whileTap={SQUASH_TAP}
+          {activeThreadId !== null && (
+            <button
               type="button"
-              onClick={() => {
-                setSubmitted(null);
-                setName('');
-                setContact('');
-                setBusinessType('');
-                setMessage('');
-              }}
-              className="min-h-[48px] cursor-pointer px-3 text-sm font-medium text-slate-600 underline underline-offset-4 hover:text-slate-900"
+              onClick={() => setActiveThreadId(null)}
+              className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50"
             >
-              Write another message
-            </motion.button>
-          </div>
-        </motion.div>
-      ) : (
-        <motion.form
+              <Plus className="h-3.5 w-3.5" />
+              New inquiry
+            </button>
+          )}
+        </div>
+      )}
+
+      <AnimatePresence mode="wait">
+        {activeThreadId ? (
+          <motion.div
+            key={`thread-${activeThreadId}`}
+            initial={{ opacity: 0, scale: 0.98, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={SPRING_EXAGGERATED}
+          >
+            <ThreadConversation
+              threadId={activeThreadId}
+              fallbackClientName={
+                lastSubmitted?.threadId === activeThreadId
+                  ? lastSubmitted.name
+                  : activeSavedMeta?.clientName
+              }
+              fallbackBusinessType={
+                lastSubmitted?.threadId === activeThreadId
+                  ? lastSubmitted.businessType
+                  : activeSavedMeta?.businessType
+              }
+              fallbackPackageChoice={
+                lastSubmitted?.threadId === activeThreadId ? lastSubmitted.packageChoice : undefined
+              }
+              onStartNewInquiry={() => setActiveThreadId(null)}
+            />
+          </motion.div>
+        ) : (
+          <motion.form
           key="inquiry-form"
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -423,6 +475,7 @@ export function ContactForm({ selectedPackage }: ContactFormProps) {
           </div>
         </motion.form>
       )}
-    </AnimatePresence>
+      </AnimatePresence>
+    </div>
   );
 }
