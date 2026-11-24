@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ArrowLeft, MessageSquare, Plus } from 'lucide-react';
 import { CONTACT_INFO } from '../data/samples';
 import { loadSavedClientThreads, type SavedClientThreadRef } from '../lib/threads';
+import { useUnreadReplies } from '../hooks/useUnreadReplies';
 import { ContactLookupBar } from './ContactLookupBar';
 import { ThreadConversation } from './ThreadConversation';
 
@@ -19,6 +20,7 @@ export function ClientChatPage({
   const [savedThreads, setSavedThreads] = useState<SavedClientThreadRef[]>(() =>
     loadSavedClientThreads()
   );
+  const { unreadThreadIds } = useUnreadReplies(savedThreads);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(() => {
     if (initialThreadId) return initialThreadId;
     const existing = loadSavedClientThreads();
@@ -81,18 +83,22 @@ export function ClientChatPage({
             </span>
             {savedThreads.map((item) => {
               const isSelected = activeThreadId === item.threadId;
+              const isUnread = Boolean(unreadThreadIds[item.threadId]) && !isSelected;
               return (
                 <button
                   key={item.threadId}
                   type="button"
                   onClick={() => setActiveThreadId(item.threadId)}
-                  className={`cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                  className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                     isSelected
                       ? 'bg-[#0F5C43] text-white'
-                      : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                      : isUnread
+                        ? 'border border-amber-300 bg-amber-50 text-amber-950 hover:bg-amber-100'
+                        : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
                   }`}
                 >
-                  {item.businessType}
+                  {isUnread && <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />}
+                  <span>{item.businessType}</span>
                 </button>
               );
             })}

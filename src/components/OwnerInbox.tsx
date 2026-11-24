@@ -23,6 +23,8 @@ import {
   ChevronDown,
   ChevronUp,
   LogOut,
+  Mail,
+  MessageCircle,
   MessageSquare,
   Send,
   Trash2,
@@ -35,6 +37,7 @@ import {
   OperationType,
 } from '../lib/firebase';
 import {
+  buildClientNudgeAction,
   formatMessageTime,
   isValidThreadToken,
   sendOwnerReply,
@@ -72,6 +75,7 @@ function OwnerThreadPanel({ inquiry, threadMeta }: OwnerThreadPanelProps) {
   const [loadingMsgs, setLoadingMsgs] = useState(Boolean(inquiry.threadId));
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
+  const [justRepliedText, setJustRepliedText] = useState<string | null>(null);
   const [panelError, setPanelError] = useState<string | null>(null);
 
   const activeThreadId = inquiry.threadId || threadMeta?.threadId || null;
@@ -137,6 +141,7 @@ function OwnerThreadPanel({ inquiry, threadMeta }: OwnerThreadPanelProps) {
         initialMessage: inquiry.message,
         body: trimmed,
       });
+      setJustRepliedText(trimmed);
       setReplyText('');
     } catch {
       setPanelError('Could not save your reply. Please try again.');
@@ -144,6 +149,18 @@ function OwnerThreadPanel({ inquiry, threadMeta }: OwnerThreadPanelProps) {
       setSending(false);
     }
   };
+
+  const latestOwnerReply =
+    justRepliedText ||
+    [...messages].reverse().find((m) => m.senderRole === 'owner')?.body ||
+    undefined;
+
+  const nudgeAction = buildClientNudgeAction({
+    contact: inquiry.contact,
+    clientName: inquiry.name,
+    businessType: inquiry.businessType,
+    replyPreview: latestOwnerReply,
+  });
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -240,15 +257,55 @@ function OwnerThreadPanel({ inquiry, threadMeta }: OwnerThreadPanelProps) {
           </p>
         )}
 
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-          <button
-            type="submit"
-            disabled={sending || !replyText.trim()}
-            className="inline-flex min-h-[40px] cursor-pointer items-center gap-1.5 rounded-lg bg-[#0F5C43] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#0B4734] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Send className="h-3.5 w-3.5" />
-            {sending ? 'Sending...' : 'Send saved reply'}
-          </button>
+        {justRepliedText && nudgeAction && (
+          <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+            <span className="font-medium">
+              Reply saved. Send a quick nudge so {inquiry.name.split(' ')[0]} checks it:
+            </span>
+            <a
+              href={nudgeAction.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md bg-[#0F5C43] px-3 py-1.5 font-semibold text-white hover:bg-[#0B4734]"
+            >
+              {nudgeAction.type === 'whatsapp' ? (
+                <MessageCircle className="h-3.5 w-3.5" />
+              ) : (
+                <Mail className="h-3.5 w-3.5" />
+              )}
+              {nudgeAction.label}
+            </a>
+          </div>
+        )}
+
+        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="submit"
+              disabled={sending || !replyText.trim()}
+              className="inline-flex min-h-[40px] cursor-pointer items-center gap-1.5 rounded-lg bg-[#0F5C43] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#0B4734] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Send className="h-3.5 w-3.5" />
+              {sending ? 'Sending...' : 'Send saved reply'}
+            </button>
+
+            {nudgeAction && (
+              <a
+                href={nudgeAction.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 transition-colors hover:border-[#0F5C43] hover:text-[#0F5C43]"
+              >
+                {nudgeAction.type === 'whatsapp' ? (
+                  <MessageCircle className="h-3.5 w-3.5 text-[#0F5C43]" />
+                ) : (
+                  <Mail className="h-3.5 w-3.5 text-[#0F5C43]" />
+                )}
+                {nudgeAction.label}
+              </a>
+            )}
+          </div>
+
           <span className="text-[11px] text-slate-500">
             Saved here for {inquiry.name} to read and reply back
           </span>

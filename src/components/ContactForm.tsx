@@ -17,6 +17,7 @@ import {
 } from '../lib/threads';
 import { ContactLookupBar } from './ContactLookupBar';
 import { ThreadConversation } from './ThreadConversation';
+import { useUnreadReplies } from '../hooks/useUnreadReplies';
 import {
   ANTICIPATION_HOVER,
   EASE_SLOW_IN_OUT,
@@ -60,6 +61,7 @@ export function ContactForm({
   const [savedThreads, setSavedThreads] = useState<SavedClientThreadRef[]>(() =>
     loadSavedClientThreads()
   );
+  const { unreadThreadIds } = useUnreadReplies(savedThreads);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(() => {
     if (initialThreadId) return initialThreadId;
     const existing = loadSavedClientThreads();
@@ -245,18 +247,22 @@ export function ContactForm({
             </span>
             {savedThreads.map((item) => {
               const isSelected = activeThreadId === item.threadId;
+              const isUnread = Boolean(unreadThreadIds[item.threadId]);
               return (
                 <button
                   key={item.threadId}
                   type="button"
                   onClick={() => setActiveThreadId(item.threadId)}
-                  className={`cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                  className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                     isSelected
                       ? 'bg-[#0F5C43] text-white'
-                      : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                      : isUnread
+                        ? 'border border-amber-300 bg-amber-50 text-amber-950 hover:bg-amber-100'
+                        : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
                   }`}
                 >
-                  {item.businessType}
+                  {isUnread && <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />}
+                  <span>{item.businessType}</span>
                 </button>
               );
             })}
@@ -286,6 +292,7 @@ export function ContactForm({
           >
             <ThreadConversation
               threadId={activeThreadId}
+              autoMarkSeen="when-visible"
               fallbackClientName={
                 lastSubmitted?.threadId === activeThreadId
                   ? lastSubmitted.name

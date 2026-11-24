@@ -265,6 +265,90 @@ export function loadSavedClientThreads(): SavedClientThreadRef[] {
   }
 }
 
+const SEEN_STORAGE_KEY = 'summit_thread_seen_v1';
+
+export function getThreadSeenMap(): Record<string, number> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(SEEN_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const result: Record<string, number> = {};
+    Object.entries(parsed as Record<string, unknown>).forEach(([k, v]) => {
+      if (isValidThreadToken(k) && typeof v === 'number' && Number.isFinite(v)) {
+        result[k] = v;
+      }
+    });
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+export function markThreadSeen(threadId: string, timestampMs?: number): void {
+  if (typeof window === 'undefined' || !isValidThreadToken(threadId)) return;
+  const current = getThreadSeenMap();
+  const nextVal = Math.max(current[threadId] ?? 0, timestampMs ?? Date.now());
+  if (current[threadId] === nextVal) return;
+
+  const next = { ...current, [threadId]: nextVal };
+  try {
+    window.localStorage.setItem(SEEN_STORAGE_KEY, JSON.stringify(next));
+    window.dispatchEvent(new CustomEvent('summit-threads-seen'));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+export function buildClientNudgeAction(params: {
+  contact: string;
+  clientName: string;
+  businessType: string;
+  replyPreview?: string;
+}): { type: 'whatsapp' | 'email'; href: string; label: string } | null {
+  const trimmedContact = params.contact.trim();
+  if (!trimmedContact) return null;
+
+  const firstName = params.clientName.trim().split(/\s+/)[0] || 'there';
+  const snippet = params.replyPreview?.trim()
+    ? `\n\n"${params.replyPreview.trim().slice(0, 140)}${params.replyPreview.trim().length > 140 ? '...' : ''}"`
+    : '';
+
+  const siteUrl =
+    typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : '';
+  const whereHint = siteUrl
+    ? `Open "My Chat" on ${siteUrl} using ${trimmedContact} to reply anytime.`
+    : `Open "My Chat" on the Summit Digital website using ${trimmedContact} to reply anytime.`;
+
+  if (trimmedContact.includes('@')) {
+    const subject = encodeURIComponent(`Reply from Emman — ${params.businessType} (Summit Digital)`);
+    const body = encodeURIComponent(
+      `Hi ${firstName},\n\nI just replied to your ${params.businessType} inquiry on Summit Digital.${snippet}\n\n${whereHint}\n\n— Emman (Summit Digital, 0700447805)`
+    );
+    return {
+      type: 'email',
+      href: `mailto:${trimmedContact}?subject=${subject}&body=${body}`,
+      label: 'Notify via Email',
+    };
+  }
+
+  let digits = trimmedContact.replace(/\D/g, '');
+  if (digits.startsWith('0') && digits.length === 10) {
+    digits = `254${digits.slice(1)}`;
+  }
+  if (digits.length < 9) return null;
+
+  const text = encodeURIComponent(
+    `Hi ${firstName}, I just replied to your ${params.businessType} inquiry on Summit Digital.${snippet}\n\n${whereHint}\n— Emman`
+  );
+  return {
+    type: 'whatsapp',
+    href: `https://wa.me/${digits}?text=${text}`,
+    label: 'Notify on WhatsApp',
+  };
+}
+
 export function saveClientThreadRef(entry: SavedClientThreadRef): SavedClientThreadRef[] {
   const existing = loadSavedClientThreads().filter((item) => item.threadId !== entry.threadId);
   const next = [entry, ...existing].slice(0, 10);

@@ -15,7 +15,12 @@ import { ClientChatPage } from './components/ClientChatPage';
 import { SampleSalonPage } from './components/SampleSalonPage';
 import { SampleBarbershopPage } from './components/SampleBarbershopPage';
 import { SampleCatererPage } from './components/SampleCatererPage';
-import { isValidThreadToken, loadSavedClientThreads } from './lib/threads';
+import {
+  isValidThreadToken,
+  loadSavedClientThreads,
+  type SavedClientThreadRef,
+} from './lib/threads';
+import { useUnreadReplies } from './hooks/useUnreadReplies';
 import {
   CONTACT_INFO,
   getWhatsAppUrl,
@@ -66,9 +71,10 @@ export default function App() {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(() =>
     parseThreadFromLocation()
   );
-  const [savedChatCount, setSavedChatCount] = useState<number>(
-    () => loadSavedClientThreads().length
+  const [savedThreads, setSavedThreads] = useState<SavedClientThreadRef[]>(
+    () => loadSavedClientThreads()
   );
+  const { unreadCount } = useUnreadReplies(savedThreads);
   const [activeSample, setActiveSample] = useState<SampleSlug | null>(() =>
     parseDemoFromHash(window.location.hash)
   );
@@ -148,7 +154,7 @@ export default function App() {
     window.location.hash = '';
     setShowClientChat(false);
     setActiveThreadId(null);
-    setSavedChatCount(loadSavedClientThreads().length);
+    setSavedThreads(loadSavedClientThreads());
     window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
   };
 
@@ -168,7 +174,7 @@ export default function App() {
             window.location.hash = '#contact';
             setShowClientChat(false);
             setActiveThreadId(null);
-            setSavedChatCount(loadSavedClientThreads().length);
+            setSavedThreads(loadSavedClientThreads());
             setTimeout(() => {
               document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
             }, 60);
@@ -185,7 +191,8 @@ export default function App() {
         <Navbar
           onNavigateSection={handleNavigateSection}
           onOpenChat={openChat}
-          savedChatCount={savedChatCount}
+          savedChatCount={savedThreads.length}
+          unreadReplyCount={unreadCount}
         />
 
         <main>
@@ -267,9 +274,15 @@ export default function App() {
                   <button
                     type="button"
                     onClick={openChat}
-                    className="cursor-pointer font-medium text-[#0F5C43] underline underline-offset-4 hover:text-[#0B4734]"
+                    className="inline-flex cursor-pointer items-center gap-1.5 font-medium text-[#0F5C43] underline underline-offset-4 hover:text-[#0B4734]"
                   >
-                    Open my chat
+                    <span>Open my chat</span>
+                    {unreadCount > 0 && (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-900 no-underline">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                        {unreadCount} new
+                      </span>
+                    )}
                   </button>
                 </motion.div>
               </motion.div>
@@ -590,7 +603,7 @@ export default function App() {
               </div>
               <ContactForm
                 selectedPackage={selectedPackage}
-                onSavedThreadsChange={(threads) => setSavedChatCount(threads.length)}
+                onSavedThreadsChange={(threads) => setSavedThreads(threads)}
               />
             </div>
           </section>
@@ -641,9 +654,14 @@ export default function App() {
               <button
                 type="button"
                 onClick={openChat}
-                className="inline-flex min-h-[44px] cursor-pointer items-center font-medium text-[#0F5C43] hover:underline underline-offset-4"
+                className="inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 font-medium text-[#0F5C43] hover:underline underline-offset-4"
               >
-                Open my chat
+                <span>Open my chat</span>
+                {unreadCount > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900">
+                    {unreadCount} new
+                  </span>
+                )}
               </button>
               <button
                 type="button"

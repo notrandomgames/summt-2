@@ -6,6 +6,7 @@ import { CONTACT_INFO, getWhatsAppUrl } from '../data/samples';
 import {
   formatMessageTime,
   isValidThreadToken,
+  markThreadSeen,
   sendClientReply,
   sortMessagesChronologically,
   type ThreadMessageRecord,
@@ -17,6 +18,7 @@ interface ThreadConversationProps {
   fallbackClientName?: string;
   fallbackBusinessType?: string;
   fallbackPackageChoice?: string;
+  autoMarkSeen?: 'always' | 'when-visible';
   onStartNewInquiry?: () => void;
 }
 
@@ -25,6 +27,7 @@ export function ThreadConversation({
   fallbackClientName,
   fallbackBusinessType,
   fallbackPackageChoice,
+  autoMarkSeen = 'always',
   onStartNewInquiry,
 }: ThreadConversationProps) {
   const [thread, setThread] = useState<ThreadRecord | null>(null);
@@ -34,6 +37,8 @@ export function ThreadConversation({
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isVisible, setIsVisible] = useState(autoMarkSeen === 'always');
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -121,6 +126,35 @@ export function ThreadConversation({
   }, [threadId, fallbackBusinessType, fallbackClientName, fallbackPackageChoice]);
 
   useEffect(() => {
+    if (autoMarkSeen === 'always') {
+      setIsVisible(true);
+      return;
+    }
+    const el = containerRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      setIsVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setIsVisible(true);
+        }
+      },
+      { threshold: 0.35 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [autoMarkSeen, threadId]);
+
+  useEffect(() => {
+    if (!isVisible || loading || !thread) return;
+    if (thread.lastMessageBy === 'owner' && thread.updatedAt) {
+      markThreadSeen(threadId, thread.updatedAt.toMillis());
+    }
+  }, [isVisible, loading, thread, threadId]);
+
+  useEffect(() => {
     if (messages.length > 1) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
@@ -187,7 +221,7 @@ export function ThreadConversation({
   const displayPackage = thread?.packageChoice || fallbackPackageChoice || '';
 
   return (
-    <div className="rounded-xl border border-[#0F5C43]/30 bg-white shadow-xs">
+    <div ref={containerRef} className="rounded-xl border border-[#0F5C43]/30 bg-white shadow-xs">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 bg-slate-50/80 px-5 py-4 sm:px-6">
         <div>

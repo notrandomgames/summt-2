@@ -7,9 +7,15 @@ interface NavbarProps {
   onNavigateSection: (sectionId: string) => void;
   onOpenChat: () => void;
   savedChatCount?: number;
+  unreadReplyCount?: number;
 }
 
-export function Navbar({ onNavigateSection, onOpenChat, savedChatCount = 0 }: NavbarProps) {
+export function Navbar({
+  onNavigateSection,
+  onOpenChat,
+  savedChatCount = 0,
+  unreadReplyCount = 0,
+}: NavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleLinkClick = (sectionId: string) => {
@@ -78,18 +84,43 @@ export function Navbar({ onNavigateSection, onOpenChat, savedChatCount = 0 }: Na
 
         {/* Zone 3: My Chat + primary action + mobile menu toggle */}
         <div className="flex items-center gap-2.5 shrink-0">
+          {unreadReplyCount > 0 && (
+            <motion.button
+              type="button"
+              whileTap={SQUASH_TAP}
+              onClick={onOpenChat}
+              className="inline-flex min-h-[40px] cursor-pointer items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 whitespace-nowrap shrink-0 md:hidden"
+            >
+              <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+              <span>{unreadReplyCount} new reply</span>
+            </motion.button>
+          )}
+
           <motion.button
             type="button"
             whileTap={SQUASH_TAP}
             onClick={onOpenChat}
-            className="hidden min-h-[44px] cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 whitespace-nowrap shrink-0 transition-colors hover:border-[#0F5C43] hover:text-[#0F5C43] md:inline-flex"
+            className={`hidden min-h-[44px] cursor-pointer items-center gap-1.5 rounded-lg border px-4 py-2 text-sm font-medium whitespace-nowrap shrink-0 transition-colors md:inline-flex ${
+              unreadReplyCount > 0
+                ? 'border-amber-300 bg-amber-50/90 text-amber-950 hover:border-amber-400 hover:bg-amber-100/80'
+                : 'border-slate-300 bg-white text-slate-800 hover:border-[#0F5C43] hover:text-[#0F5C43]'
+            }`}
           >
-            <MessageSquare className="h-4 w-4 text-[#0F5C43]" />
+            <MessageSquare
+              className={`h-4 w-4 ${unreadReplyCount > 0 ? 'text-amber-700' : 'text-[#0F5C43]'}`}
+            />
             <span>My Chat</span>
-            {savedChatCount > 0 && (
-              <span className="font-mono-num rounded-md bg-[#0F5C43]/10 px-1.5 py-0.5 text-xs font-semibold text-[#0F5C43]">
-                {savedChatCount}
+            {unreadReplyCount > 0 ? (
+              <span className="inline-flex items-center gap-1 rounded-md bg-amber-600 px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+                {unreadReplyCount} new
               </span>
+            ) : (
+              savedChatCount > 0 && (
+                <span className="font-mono-num rounded-md bg-[#0F5C43]/10 px-1.5 py-0.5 text-xs font-semibold text-[#0F5C43]">
+                  {savedChatCount}
+                </span>
+              )
             )}
           </motion.button>
 
@@ -155,10 +186,21 @@ export function Navbar({ onNavigateSection, onOpenChat, savedChatCount = 0 }: Na
                   setMobileOpen(false);
                   onOpenChat();
                 }}
-                className="mt-2 flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-800 hover:bg-slate-50"
+                className={`mt-2 flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 py-3 text-base font-semibold ${
+                  unreadReplyCount > 0
+                    ? 'border-amber-300 bg-amber-50 text-amber-950 hover:bg-amber-100'
+                    : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
+                }`}
               >
-                <MessageSquare className="h-4 w-4 text-[#0F5C43]" />
+                <MessageSquare
+                  className={`h-4 w-4 ${unreadReplyCount > 0 ? 'text-amber-700' : 'text-[#0F5C43]'}`}
+                />
                 <span>My Chat{savedChatCount > 0 ? ` (${savedChatCount})` : ''}</span>
+                {unreadReplyCount > 0 && (
+                  <span className="rounded-md bg-amber-600 px-1.5 py-0.5 text-xs font-semibold text-white">
+                    {unreadReplyCount} new
+                  </span>
+                )}
               </motion.button>
               <motion.a
                 whileTap={SQUASH_TAP}
