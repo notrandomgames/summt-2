@@ -1,12 +1,48 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
+import { getAuth, GoogleAuthProvider, signInAnonymously, type User } from 'firebase/auth';
 import { doc, getDocFromServer, getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
+
+const recaptchaSiteKey = (import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined)?.trim();
+if (typeof window !== 'undefined' && recaptchaSiteKey) {
+  try {
+    initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(recaptchaSiteKey),
+      isTokenAutoRefreshEnabled: true,
+    });
+  } catch {
+    // Ignore duplicate App Check initialization in dev
+  }
+}
+
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const googleAuthProvider = new GoogleAuthProvider();
+
+let pendingAnonymousSignIn: Promise<User> | null = null;
+
+export async function ensureClientAuthSession(): Promise<User> {
+  if (auth.currentUser) return auth.currentUser;
+  if (!pendingAnonymousSignIn) {
+    pendingAnonymousSignIn = signInAnonymously(auth)
+      .then((cred) => cred.user)
+      .finally(() => {
+        pendingAnonymousSignIn = null;
+      });
+  }
+  return pendingAnonymousSignIn;
+}
+
+export function isAnonymousAuthDisabledError(error: unknown): boolean {
+  const code = (error as { code?: string })?.code ?? '';
+  return (
+    code === 'auth/admin-restricted-operation' ||
+    code === 'auth/operation-not-allowed'
+  );
+}
 
 export enum OperationType {
   CREATE = 'create',

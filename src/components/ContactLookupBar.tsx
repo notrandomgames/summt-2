@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from 'react';
-import { Search } from 'lucide-react';
+import { Lock, Search } from 'lucide-react';
+import { isAnonymousAuthDisabledError } from '../lib/firebase';
+import { CONTACT_INFO } from '../data/samples';
 import { lookupThreadsByContact, type SavedClientThreadRef } from '../lib/threads';
 
 interface ContactLookupBarProps {
@@ -9,33 +11,46 @@ interface ContactLookupBarProps {
 
 export function ContactLookupBar({ onThreadsFound, compact = false }: ContactLookupBarProps) {
   const [contactInput, setContactInput] = useState('');
+  const [pinInput, setPinInput] = useState('');
   const [searching, setSearching] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
 
   const handleLookup = async (e: FormEvent) => {
     e.preventDefault();
     const raw = contactInput.trim();
+    const rawPin = pinInput.trim();
     if (!raw) {
       setStatusMsg('Enter the WhatsApp number or email you used to message Emman.');
+      return;
+    }
+    if (!rawPin) {
+      setStatusMsg('Enter the 4-digit Chat PIN you chose when sending your message.');
       return;
     }
 
     setStatusMsg(null);
     setSearching(true);
     try {
-      const found = await lookupThreadsByContact(raw);
+      const found = await lookupThreadsByContact(raw, rawPin);
       if (found.length === 0) {
-        setStatusMsg('No saved chat found for that number or email yet.');
+        setStatusMsg('No saved chat matched that phone/email and Chat PIN.');
       } else {
         setContactInput('');
+        setPinInput('');
         onThreadsFound(found);
       }
     } catch (err) {
-      setStatusMsg(
-        err instanceof Error && err.message
-          ? err.message
-          : 'Could not look up your chat right now. Please try again.'
-      );
+      if (isAnonymousAuthDisabledError(err)) {
+        setStatusMsg(
+          `Chat lookup requires Anonymous sign-in in Firebase. Meanwhile, WhatsApp Emman on ${CONTACT_INFO.phoneDisplay}.`
+        );
+      } else {
+        setStatusMsg(
+          err instanceof Error && err.message
+            ? err.message
+            : 'Could not look up your chat right now. Please try again.'
+        );
+      }
     } finally {
       setSearching(false);
     }
@@ -51,7 +66,7 @@ export function ContactLookupBar({ onThreadsFound, compact = false }: ContactLoo
       }
     >
       <p className="text-xs font-semibold text-slate-800 sm:text-sm">
-        Already sent a message? Open your chat with your phone or email
+        Already sent a message? Open your chat with your phone or email + Chat PIN
       </p>
       <div className="mt-2.5 flex flex-col gap-2 sm:flex-row">
         <input
@@ -61,10 +76,26 @@ export function ContactLookupBar({ onThreadsFound, compact = false }: ContactLoo
             setContactInput(e.target.value);
             if (statusMsg) setStatusMsg(null);
           }}
-          placeholder="e.g. 0712 345 678 or your@email.com"
+          placeholder="0712 345 678 or your@email.com"
           aria-label="WhatsApp number or email to open your chat"
           className="min-h-[44px] flex-1 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-[#0F5C43] focus:outline-none focus:ring-2 focus:ring-[#0F5C43]/15"
         />
+        <div className="relative sm:w-36">
+          <Lock className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            inputMode="numeric"
+            maxLength={8}
+            value={pinInput}
+            onChange={(e) => {
+              setPinInput(e.target.value.replace(/[^\d]/g, ''));
+              if (statusMsg) setStatusMsg(null);
+            }}
+            placeholder="4-digit PIN"
+            aria-label="4-digit Chat PIN"
+            className="font-mono-num min-h-[44px] w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-[#0F5C43] focus:outline-none focus:ring-2 focus:ring-[#0F5C43]/15"
+          />
+        </div>
         <button
           type="submit"
           disabled={searching}

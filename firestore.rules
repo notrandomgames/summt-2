@@ -100,6 +100,7 @@ service cloud.firestore {
         && data.keys().hasOnly([
           'inquiryId',
           'clientName',
+          'clientUid',
           'businessType',
           'packageChoice',
           'status',
@@ -110,6 +111,7 @@ service cloud.firestore {
         ])
         && isValidId(data.inquiryId)
         && data.clientName is string && data.clientName.size() >= 2 && data.clientName.size() <= 100
+        && (!('clientUid' in data.keys()) || (data.clientUid is string && data.clientUid.size() > 0 && data.clientUid.size() <= 128))
         && data.businessType is string && data.businessType.size() >= 1 && data.businessType.size() <= 120
         && data.packageChoice is string && data.packageChoice.size() <= 80 && isValidPackageChoice(data.packageChoice)
         && data.status is string && data.status.size() <= 20 && data.status in ['new', 'replied', 'archived']
@@ -124,6 +126,7 @@ service cloud.firestore {
           'threadId',
           'senderRole',
           'senderName',
+          'senderUid',
           'body',
           'createdAt'
         ])
@@ -131,12 +134,14 @@ service cloud.firestore {
           'threadId',
           'senderRole',
           'senderName',
+          'senderUid',
           'body',
           'createdAt'
         ])
         && isValidThreadToken(data.threadId)
         && data.senderRole is string && data.senderRole.size() <= 20 && data.senderRole in ['client', 'owner']
         && data.senderName is string && data.senderName.size() >= 2 && data.senderName.size() <= 100
+        && data.senderUid is string && data.senderUid.size() > 0 && data.senderUid.size() <= 128
         && data.body is string && data.body.size() >= 1 && data.body.size() <= 1500
         && data.createdAt is timestamp;
     }
@@ -155,8 +160,12 @@ service cloud.firestore {
         && data.keys().hasOnly(['threads', 'updatedAt'])
         && data.threads is list
         && data.threads.size() >= 1
-        && data.threads.size() <= 10
+        && data.threads.size() <= 5
         && isValidThreadLookupEntry(data.threads[0])
+        && (data.threads.size() < 2 || isValidThreadLookupEntry(data.threads[1]))
+        && (data.threads.size() < 3 || isValidThreadLookupEntry(data.threads[2]))
+        && (data.threads.size() < 4 || isValidThreadLookupEntry(data.threads[3]))
+        && (data.threads.size() < 5 || isValidThreadLookupEntry(data.threads[4]))
         && data.updatedAt is timestamp;
     }
 
@@ -170,8 +179,9 @@ service cloud.firestore {
       allow get: if isValidId(inquiryId) && isAdmin();
       allow list: if isAdmin();
 
-      // Public lead capture with atomic thread creation and server-timestamp enforcement
-      allow create: if isValidId(inquiryId)
+      // Authenticated (including anonymous) lead capture with atomic thread creation
+      allow create: if isSignedIn()
+        && isValidId(inquiryId)
         && isValidInquiry(incoming())
         && 'threadId' in incoming().keys()
         && incoming().status == 'new'
@@ -194,23 +204,25 @@ service cloud.firestore {
     }
 
     match /threadLookups/{lookupHash} {
-      // Direct get by SHA-256 contact hash only; public listing is strictly disabled
-      allow get: if isValidLookupId(lookupHash);
+      // Direct get by SHA-256(contact + PIN) hash for signed-in visitors; listing disabled
+      allow get: if isSignedIn() && isValidLookupId(lookupHash);
       allow list: if isAdmin();
 
-      allow create: if isValidLookupId(lookupHash)
+      allow create: if isSignedIn()
+        && isValidLookupId(lookupHash)
         && isValidThreadLookup(incoming())
         && incoming().updatedAt == request.time
         && existsAfter(/databases/$(database)/documents/threads/$(incoming().threads[0].threadId));
 
-      allow update: if isValidLookupId(lookupHash)
+      allow update: if isSignedIn()
+        && isValidLookupId(lookupHash)
         && isValidThreadLookup(incoming())
         && incoming().updatedAt == request.time
         && (
           isAdmin() ||
           (
             incoming().diff(existing()).affectedKeys().hasOnly(['threads', 'updatedAt'])
-            && incoming().threads.size() >= existing().threads.size()
+            && (incoming().threads.size() >= existing().threads.size() || incoming().threads.size() == 5)
             && existsAfter(/databases/$(database)/documents/threads/$(incoming().threads[0].threadId))
           )
         );
@@ -219,11 +231,12 @@ service cloud.firestore {
     }
 
     match /threads/{threadId} {
-      // Unguessable 128-bit thread token grants direct get access without exposing PII or list enumeration
-      allow get: if isValidThreadToken(threadId);
+      // Signed-in (anonymous or verified) access by unguessable 128-bit thread token; listing restricted to owner
+      allow get: if isSignedIn() && isValidThreadToken(threadId);
       allow list: if isAdmin();
 
-      allow create: if isValidThreadToken(threadId)
+      allow create: if isSignedIn()
+        && isValidThreadToken(threadId)
         && isValidThread(incoming())
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time
@@ -232,36 +245,48 @@ service cloud.firestore {
           (
             incoming().status == 'new'
             && incoming().lastMessageBy == 'client'
+            && 'clientUid' in incoming().keys()
+            && incoming().clientUid == request.auth.uid
             && existsAfter(/databases/$(database)/documents/inquiries/$(incoming().inquiryId))
           )
         );
 
-      allow update: if isValidThreadToken(threadId)
+      // Clients cannot spoof lastMessagePreview, status, clientUid, or immutable metadata
+      allow update: if isSignedIn()
+        && isValidThreadToken(threadId)
         && isValidThread(incoming())
         && incoming().inquiryId == existing().inquiryId
         && incoming().clientName == existing().clientName
         && incoming().businessType == existing().businessType
         && incoming().packageChoice == existing().packageChoice
+        && (!('clientUid' in existing().keys()) || ('clientUid' in incoming().keys() && incoming().clientUid == existing().clientUid))
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
         && (
           (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'lastMessagePreview', 'lastMessageBy', 'updatedAt'])) ||
-          (incoming().diff(existing()).affectedKeys().hasOnly(['lastMessagePreview', 'lastMessageBy', 'updatedAt']) && incoming().lastMessageBy == 'client')
+          (incoming().diff(existing()).affectedKeys().hasOnly(['lastMessageBy', 'updatedAt']) && incoming().lastMessageBy == 'client')
         );
 
       allow delete: if isValidThreadToken(threadId) && isAdmin();
 
       match /messages/{messageId} {
-        allow get: if isValidId(messageId) && (isAdmin() || isValidThreadToken(threadId));
-        allow list: if isAdmin() || (isValidThreadToken(threadId) && resource.data.threadId == threadId);
+        allow get: if isSignedIn() && isValidId(messageId) && (isAdmin() || isValidThreadToken(threadId));
+        allow list: if isSignedIn() && (isAdmin() || (isValidThreadToken(threadId) && resource.data.threadId == threadId));
 
-        allow create: if isValidId(messageId)
+        allow create: if isSignedIn()
+          && isValidId(messageId)
           && isValidThreadMessage(incoming())
           && incoming().threadId == threadId
+          && incoming().senderUid == request.auth.uid
           && incoming().createdAt == request.time
           && (
             (incoming().senderRole == 'owner' && isAdmin()) ||
-            (incoming().senderRole == 'client' && isValidThreadToken(threadId) && existsAfter(/databases/$(database)/documents/threads/$(threadId)))
+            (
+              incoming().senderRole == 'client'
+              && isValidThreadToken(threadId)
+              && existsAfter(/databases/$(database)/documents/threads/$(threadId))
+              && incoming().senderName == getAfter(/databases/$(database)/documents/threads/$(threadId)).data.clientName
+            )
           );
 
         allow update: if false;

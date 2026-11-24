@@ -1,15 +1,23 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { doc, serverTimestamp, writeBatch } from 'firebase/firestore';
-import { Check, MessageCircle, MessageSquare, Phone, Plus } from 'lucide-react';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { Check, Lock, MessageCircle, MessageSquare, Phone, Plus } from 'lucide-react';
+import {
+  db,
+  ensureClientAuthSession,
+  handleFirestoreError,
+  isAnonymousAuthDisabledError,
+  OperationType,
+} from '../lib/firebase';
 import { CONTACT_INFO, getWhatsAppUrl } from '../data/samples';
 import {
   buildPreview,
   computeContactLookupHash,
   createMessageId,
   createThreadToken,
+  generateChatPin,
   loadSavedClientThreads,
+  normalizeChatPin,
   normalizeContactInput,
   prepareLookupEntries,
   saveClientThreadRef,
@@ -48,6 +56,8 @@ interface ContactFormProps {
   onSavedThreadsChange?: (threads: SavedClientThreadRef[]) => void;
 }
 
+const SUBMIT_COOLDOWN_MS = 20000;
+
 function createInquiryId(): string {
   const randomPart = Math.random().toString(36).slice(2, 10);
   return `inq_${Date.now().toString(36)}_${randomPart}`;
@@ -69,6 +79,7 @@ export function ContactForm({
   });
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
+  const [chatPin, setChatPin] = useState(() => generateChatPin());
   const [businessType, setBusinessType] = useState('');
   const [packageChoice, setPackageChoice] = useState<string>(
     selectedPackage && PACKAGE_OPTIONS.includes(selectedPackage as (typeof PACKAGE_OPTIONS)[number])
@@ -76,10 +87,12 @@ export function ContactForm({
       : PACKAGE_OPTIONS[0]
   );
   const [message, setMessage] = useState('');
+  const [websiteTrap, setWebsiteTrap] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [lastSubmitted, setLastSubmitted] = useState<SavedInquiry | null>(null);
   const [submitPressed, setSubmitPressed] = useState(false);
+  const lastSubmitAtRef = useRef<number>(0);
 
   useEffect(() => {
     if (
@@ -99,12 +112,27 @@ export function ContactForm({
   }, [initialThreadId]);
 
   const contactStatus = contact.trim() ? normalizeContactInput(contact) : null;
+  const pinStatus = chatPin.trim() ? normalizeChatPin(chatPin) : null;
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+
+    // Silent bot trap
+    if (websiteTrap.trim()) {
+      return;
+    }
+
+    const elapsed = Date.now() - lastSubmitAtRef.current;
+    if (elapsed < SUBMIT_COOLDOWN_MS) {
+      const waitSec = Math.ceil((SUBMIT_COOLDOWN_MS - elapsed) / 1000);
+      setErrorMsg(`Please wait ${waitSec}s before sending another new inquiry.`);
+      return;
+    }
+
     const trimmedName = name.trim().slice(0, 100);
     const contactCheck = normalizeContactInput(contact);
     const trimmedContact = contactCheck.normalized.slice(0, 120);
+    const pinCheck = normalizeChatPin(chatPin);
     const trimmedBusiness = (businessType.trim() || 'Local business').slice(0, 120);
     const trimmedMessage = message.trim().slice(0, 1500);
 
@@ -115,6 +143,12 @@ export function ContactForm({
     if (!contactCheck.valid || trimmedContact.length < 5) {
       setErrorMsg(
         contactCheck.hint || 'Please enter your WhatsApp number or email address so I can reply.'
+      );
+      return;
+    }
+    if (!pinCheck.valid) {
+      setErrorMsg(
+        pinCheck.hint || 'Choose a 4-digit Chat PIN so only you can unlock your chat on another phone.'
       );
       return;
     }
@@ -141,6 +175,8 @@ export function ContactForm({
     };
 
     try {
+      const user = await ensureClientAuthSession();
+
       const batch = writeBatch(db);
       batch.set(doc(db, 'inquiries', inquiryId), {
         name: trimmedName,
@@ -156,6 +192,7 @@ export function ContactForm({
       batch.set(doc(db, 'threads', threadId), {
         inquiryId,
         clientName: trimmedName,
+        clientUid: user.uid,
         businessType: trimmedBusiness,
         packageChoice,
         status: 'new',
@@ -168,11 +205,12 @@ export function ContactForm({
         threadId,
         senderRole: 'client',
         senderName: trimmedName,
+        senderUid: user.uid,
         body: trimmedMessage,
         createdAt: serverTimestamp(),
       });
 
-      const lookupHash = await computeContactLookupHash(trimmedContact);
+      const lookupHash = await computeContactLookupHash(trimmedContact, pinCheck.normalized);
       if (lookupHash) {
         const prepared = await prepareLookupEntries(lookupHash, {
           threadId,
@@ -195,10 +233,12 @@ export function ContactForm({
 
       await batch.commit();
 
+      lastSubmitAtRef.current = Date.now();
       const nextSaved = saveClientThreadRef({
         threadId,
         clientName: trimmedName,
         businessType: trimmedBusiness,
+        chatPin: pinCheck.normalized,
         savedAt: Date.now(),
       });
       setSavedThreads(nextSaved);
@@ -207,9 +247,16 @@ export function ContactForm({
       setActiveThreadId(threadId);
       setName('');
       setContact('');
+      setChatPin(generateChatPin());
       setBusinessType('');
       setMessage('');
     } catch (error) {
+      if (isAnonymousAuthDisabledError(error)) {
+        setErrorMsg(
+          `Anonymous chat sign-in is not enabled in Firebase yet. Please message Emman on WhatsApp or call ${CONTACT_INFO.phoneDisplay}.`
+        );
+        return;
+      }
       setErrorMsg(
         `Could not save your message right now. Please message me on WhatsApp or call ${CONTACT_INFO.phoneDisplay}.`
       );
@@ -320,6 +367,19 @@ export function ContactForm({
           noValidate
           className="rounded-xl border border-slate-200 bg-white p-6 sm:p-8"
         >
+          {/* Off-screen honeypot field for automated spam bots */}
+          <div className="sr-only" aria-hidden="true">
+            <label htmlFor="contact-website-url">Leave this field empty</label>
+            <input
+              id="contact-website-url"
+              type="text"
+              tabIndex={-1}
+              autoComplete="off"
+              value={websiteTrap}
+              onChange={(e) => setWebsiteTrap(e.target.value)}
+            />
+          </div>
+
           {/* Chunk 1: Who you are */}
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
@@ -369,7 +429,7 @@ export function ContactForm({
             </div>
           </div>
 
-          {/* Chunk 2: Your business & package (easy Fitts choice buttons + select fallback) */}
+          {/* Chunk 2: Your business, package & Chat PIN */}
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor="business-type" className="block text-sm font-medium text-slate-800">
@@ -402,6 +462,39 @@ export function ContactForm({
                   </option>
                 ))}
               </select>
+            </div>
+          </div>
+
+          <div className="mt-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label htmlFor="chat-pin" className="block text-sm font-medium text-slate-800">
+                4-digit Chat PIN (locks your chat on other devices)
+              </label>
+              {pinStatus?.valid && (
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-[#0F5C43]">
+                  <Lock className="h-3.5 w-3.5" />
+                  PIN ready
+                </span>
+              )}
+            </div>
+            <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <input
+                id="chat-pin"
+                type="text"
+                inputMode="numeric"
+                maxLength={8}
+                value={chatPin}
+                onChange={(e) => {
+                  setChatPin(e.target.value.replace(/[^\d]/g, ''));
+                  if (errorMsg) setErrorMsg(null);
+                }}
+                placeholder="4-digit PIN (e.g. 4829)"
+                required
+                className="font-mono-num min-h-[48px] w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-base text-slate-900 placeholder:text-slate-400 transition-colors focus:border-[#0F5C43] focus:outline-none focus:ring-2 focus:ring-[#0F5C43]/15 sm:w-48"
+              />
+              <p className="text-xs text-slate-500">
+                Keep this PIN handy if you want to reopen your replies from a different phone later.
+              </p>
             </div>
           </div>
 

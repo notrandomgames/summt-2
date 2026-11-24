@@ -69,7 +69,7 @@ export function ClientChatPage({
             Your messages with Emman
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Read replies from Emman and send follow-up messages anytime. If you messaged from another device, enter your WhatsApp number or email below to open your chat.
+            Read replies from Emman and send follow-up messages anytime. If you messaged from another device, enter your WhatsApp number or email and your 4-digit Chat PIN below to open your chat.
           </p>
         </div>
 
@@ -118,7 +118,7 @@ export function ClientChatPage({
               No saved chat open on this browser yet
             </p>
             <p className="mt-1.5 text-sm text-slate-600">
-              Enter your WhatsApp number or email above to load an earlier conversation, or start a fresh inquiry with Emman.
+              Enter your WhatsApp number or email and 4-digit Chat PIN above to load an earlier conversation, or start a fresh inquiry with Emman.
             </p>
             <button
               type="button"

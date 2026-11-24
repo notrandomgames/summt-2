@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
 import { doc, onSnapshot, type Timestamp } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { auth, db, ensureClientAuthSession } from '../lib/firebase';
 import {
   getThreadSeenMap,
   isValidThreadToken,
@@ -17,8 +18,16 @@ export function useUnreadReplies(threads: SavedClientThreadRef[]): {
   unreadThreadIds: Record<string, boolean>;
   unreadCount: number;
 } {
+  const [authUid, setAuthUid] = useState<string | null>(() => auth.currentUser?.uid ?? null);
   const [activityMap, setActivityMap] = useState<Record<string, ThreadActivity>>({});
   const [seenMap, setSeenMap] = useState<Record<string, number>>(() => getThreadSeenMap());
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
+      setAuthUid(nextUser?.uid ?? null);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     const syncSeen = () => {
@@ -38,6 +47,13 @@ export function useUnreadReplies(threads: SavedClientThreadRef[]): {
     const validIds = threads.map((t) => t.threadId).filter(isValidThreadToken);
     if (validIds.length === 0) {
       setActivityMap({});
+      return;
+    }
+
+    if (!authUid) {
+      void ensureClientAuthSession().catch(() => {
+        // Silent fallback if anonymous auth is disabled
+      });
       return;
     }
 
@@ -65,7 +81,7 @@ export function useUnreadReplies(threads: SavedClientThreadRef[]): {
     return () => {
       unsubscribers.forEach((unsub) => unsub());
     };
-  }, [threadKey]);
+  }, [threadKey, authUid]);
 
   const unreadThreadIds: Record<string, boolean> = {};
   let unreadCount = 0;

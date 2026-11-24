@@ -1,11 +1,20 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
 import { MessageCircle, Send } from 'lucide-react';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import {
+  auth,
+  db,
+  ensureClientAuthSession,
+  handleFirestoreError,
+  isAnonymousAuthDisabledError,
+  OperationType,
+} from '../lib/firebase';
 import { CONTACT_INFO, getWhatsAppUrl } from '../data/samples';
 import {
   formatMessageTime,
   isValidThreadToken,
+  loadSavedClientThreads,
   markThreadSeen,
   sendClientReply,
   sortMessagesChronologically,
@@ -22,6 +31,8 @@ interface ThreadConversationProps {
   onStartNewInquiry?: () => void;
 }
 
+const REPLY_COOLDOWN_MS = 3000;
+
 export function ThreadConversation({
   threadId,
   fallbackClientName,
@@ -30,6 +41,7 @@ export function ThreadConversation({
   autoMarkSeen = 'always',
   onStartNewInquiry,
 }: ThreadConversationProps) {
+  const [authUid, setAuthUid] = useState<string | null>(() => auth.currentUser?.uid ?? null);
   const [thread, setThread] = useState<ThreadRecord | null>(null);
   const [messages, setMessages] = useState<ThreadMessageRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,6 +52,17 @@ export function ThreadConversation({
   const [isVisible, setIsVisible] = useState(autoMarkSeen === 'always');
   const containerRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const lastReplyAtRef = useRef<number>(0);
+
+  const savedPin =
+    loadSavedClientThreads().find((item) => item.threadId === threadId)?.chatPin ?? null;
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
+      setAuthUid(nextUser?.uid ?? null);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (!isValidThreadToken(threadId)) {
@@ -51,6 +74,24 @@ export function ThreadConversation({
     setLoading(true);
     setNotFound(false);
     setErrorMsg(null);
+
+    if (!authUid) {
+      let active = true;
+      void ensureClientAuthSession().catch((err) => {
+        if (!active) return;
+        setLoading(false);
+        if (isAnonymousAuthDisabledError(err)) {
+          setErrorMsg(
+            `Anonymous chat sign-in is not enabled yet. Please message Emman on WhatsApp (${CONTACT_INFO.phoneDisplay}).`
+          );
+        } else {
+          setErrorMsg('Could not start a chat session right now.');
+        }
+      });
+      return () => {
+        active = false;
+      };
+    }
 
     const threadRef = doc(db, 'threads', threadId);
     const unsubscribeThread = onSnapshot(
@@ -66,6 +107,7 @@ export function ThreadConversation({
             threadId: snap.id,
             inquiryId: String(data.inquiryId ?? ''),
             clientName: String(data.clientName ?? fallbackClientName ?? 'You'),
+            clientUid: data.clientUid ? String(data.clientUid) : undefined,
             businessType: String(data.businessType ?? fallbackBusinessType ?? 'Local business'),
             packageChoice: String(data.packageChoice ?? fallbackPackageChoice ?? ''),
             status: (data.status as ThreadRecord['status']) ?? 'new',
@@ -101,6 +143,7 @@ export function ThreadConversation({
             threadId: String(d.threadId ?? threadId),
             senderRole: (d.senderRole as 'client' | 'owner') ?? 'client',
             senderName: String(d.senderName ?? 'Client'),
+            senderUid: d.senderUid ? String(d.senderUid) : undefined,
             body: String(d.body ?? ''),
             createdAt: d.createdAt ?? null,
           };
@@ -123,7 +166,7 @@ export function ThreadConversation({
       unsubscribeThread();
       unsubscribeMessages();
     };
-  }, [threadId, fallbackBusinessType, fallbackClientName, fallbackPackageChoice]);
+  }, [threadId, authUid, fallbackBusinessType, fallbackClientName, fallbackPackageChoice]);
 
   useEffect(() => {
     if (autoMarkSeen === 'always') {
@@ -164,6 +207,12 @@ export function ThreadConversation({
     const trimmed = replyText.trim();
     if (!trimmed || sending) return;
 
+    const elapsed = Date.now() - lastReplyAtRef.current;
+    if (elapsed < REPLY_COOLDOWN_MS) {
+      setErrorMsg('Please wait a moment before sending another reply.');
+      return;
+    }
+
     setErrorMsg(null);
     setSending(true);
     try {
@@ -172,11 +221,18 @@ export function ThreadConversation({
         clientName: thread?.clientName || fallbackClientName || 'Client',
         body: trimmed,
       });
+      lastReplyAtRef.current = Date.now();
       setReplyText('');
-    } catch {
-      setErrorMsg(
-        `Could not save your reply right now. You can also WhatsApp Emman on ${CONTACT_INFO.phoneDisplay}.`
-      );
+    } catch (err) {
+      if (isAnonymousAuthDisabledError(err)) {
+        setErrorMsg(
+          `Anonymous chat sign-in is not enabled yet. Please WhatsApp Emman on ${CONTACT_INFO.phoneDisplay}.`
+        );
+      } else {
+        setErrorMsg(
+          `Could not save your reply right now. You can also WhatsApp Emman on ${CONTACT_INFO.phoneDisplay}.`
+        );
+      }
     } finally {
       setSending(false);
     }
@@ -238,13 +294,18 @@ export function ThreadConversation({
                 Waiting for Emman&apos;s reply
               </span>
             )}
+            {savedPin && (
+              <span className="font-mono-num inline-flex items-center rounded-md border border-slate-200 bg-white px-2 py-0.5 text-xs font-semibold text-slate-700">
+                PIN: {savedPin}
+              </span>
+            )}
           </div>
           <h3 className="font-display mt-1.5 text-base font-bold text-slate-900 sm:text-lg">
             {displayBusiness}
           </h3>
           {displayPackage && <p className="text-xs text-slate-500">{displayPackage}</p>}
           <p className="mt-1 text-[11px] text-slate-500">
-            Reopen anytime from <span className="font-semibold text-slate-700">My Chat</span> on this website using your WhatsApp number or email.
+            Reopen on another device from <span className="font-semibold text-slate-700">My Chat</span> using your WhatsApp/email and Chat PIN.
           </p>
         </div>
 

@@ -94,6 +94,12 @@
           "minLength": 2,
           "maxLength": 100
         },
+        "clientUid": {
+          "type": "string",
+          "description": "Firebase Auth UID (anonymous or signed-in) that initiated the thread.",
+          "minLength": 1,
+          "maxLength": 128
+        },
         "businessType": {
           "type": "string",
           "description": "Type and location of the business.",
@@ -119,7 +125,7 @@
         },
         "lastMessagePreview": {
           "type": "string",
-          "description": "Short preview of the latest message in the thread.",
+          "description": "Short preview of the latest message (updated only on creation or owner reply).",
           "minLength": 1,
           "maxLength": 200
         },
@@ -170,9 +176,15 @@
         },
         "senderName": {
           "type": "string",
-          "description": "Display name shown on the message.",
+          "description": "Display name shown on the message (verified against parent thread clientName for clients).",
           "minLength": 2,
           "maxLength": 100
+        },
+        "senderUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the message author.",
+          "minLength": 1,
+          "maxLength": 128
         },
         "body": {
           "type": "string",
@@ -185,16 +197,16 @@
           "format": "date-time"
         }
       },
-      "required": ["threadId", "senderRole", "senderName", "body", "createdAt"]
+      "required": ["threadId", "senderRole", "senderName", "senderUid", "body", "createdAt"]
     },
     "ThreadLookup": {
       "title": "ThreadLookup",
-      "description": "SHA-256 contact-hash index mapping a client's phone or email hash to their saved thread IDs so they can reopen chats directly from the site without a link.",
+      "description": "SHA-256 salted contact+PIN index enabling direct chat lookup on any device only when both contact and 4-digit PIN are known.",
       "type": "object",
       "properties": {
         "threads": {
           "type": "array",
-          "description": "Bounded list of thread references for this contact hash (up to 10)."
+          "description": "Strictly bounded list of thread references for this contact+PIN hash (1 to 5 items)."
         },
         "updatedAt": {
           "type": "string",
@@ -244,7 +256,7 @@
       "schema": {
         "$ref": "#/entities/ThreadLookup"
       },
-      "description": "SHA-256 hashed contact index enabling direct chat lookup on any device without exposing raw contact lists."
+      "description": "SHA-256 contact+PIN hashed index enabling cross-device chat lookup without exposing raw contacts."
     },
     "/admins/{adminId}": {
       "schema": {

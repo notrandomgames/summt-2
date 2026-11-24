@@ -5,7 +5,13 @@ import {
   writeBatch,
   type Timestamp,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from './firebase';
+import {
+  auth,
+  db,
+  ensureClientAuthSession,
+  handleFirestoreError,
+  OperationType,
+} from './firebase';
 
 export type MessageSenderRole = 'client' | 'owner';
 
@@ -13,6 +19,7 @@ export interface ThreadRecord {
   threadId: string;
   inquiryId: string;
   clientName: string;
+  clientUid?: string;
   businessType: string;
   packageChoice: string;
   status: 'new' | 'replied' | 'archived';
@@ -27,6 +34,7 @@ export interface ThreadMessageRecord {
   threadId: string;
   senderRole: MessageSenderRole;
   senderName: string;
+  senderUid?: string;
   body: string;
   createdAt?: Timestamp | null;
 }
@@ -35,6 +43,7 @@ export interface SavedClientThreadRef {
   threadId: string;
   clientName: string;
   businessType: string;
+  chatPin?: string;
   savedAt: number;
 }
 
@@ -48,6 +57,31 @@ const STORAGE_KEY = 'summit_saved_threads_v1';
 
 export function isValidThreadToken(id: string): boolean {
   return typeof id === 'string' && id.length >= 28 && id.length <= 64 && /^thr_[a-f0-9]+$/.test(id);
+}
+
+export function generateChatPin(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const buf = new Uint32Array(1);
+    crypto.getRandomValues(buf);
+    return String(1000 + (buf[0] % 9000));
+  }
+  return String(1000 + Math.floor(Math.random() * 9000));
+}
+
+export function normalizeChatPin(raw: string): {
+  valid: boolean;
+  normalized: string;
+  hint?: string;
+} {
+  const cleaned = raw.replace(/\s+/g, '');
+  if (!/^\d{4,8}$/.test(cleaned)) {
+    return {
+      valid: false,
+      normalized: cleaned,
+      hint: 'Enter a 4 to 8 digit Chat PIN (numbers only).',
+    };
+  }
+  return { valid: true, normalized: cleaned };
 }
 
 /**
@@ -93,9 +127,12 @@ export function normalizeContactInput(raw: string): {
   };
 }
 
-export async function computeContactLookupHash(normalizedContact: string): Promise<string | null> {
+export async function computeContactLookupHash(
+  normalizedContact: string,
+  normalizedPin: string
+): Promise<string | null> {
   if (typeof window === 'undefined' || !window.crypto?.subtle) return null;
-  const input = `summit-digital:${normalizedContact.trim().toLowerCase()}`;
+  const input = `summit-digital:${normalizedContact.trim().toLowerCase()}:pin:${normalizedPin.trim()}`;
   const data = new TextEncoder().encode(input);
   const digest = await window.crypto.subtle.digest('SHA-256', data);
   const hex = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
@@ -127,7 +164,7 @@ export async function prepareLookupEntries(
       const merged = [
         newEntry,
         ...existingEntries.filter((item) => item.threadId !== newEntry.threadId),
-      ].slice(0, 10);
+      ].slice(0, 5);
       return { exists: true, entries: merged };
     }
   } catch {
@@ -137,17 +174,25 @@ export async function prepareLookupEntries(
 }
 
 export async function lookupThreadsByContact(
-  rawContact: string
+  rawContact: string,
+  rawPin: string
 ): Promise<SavedClientThreadRef[]> {
   const check = normalizeContactInput(rawContact);
   if (!check.valid) {
     throw new Error(check.hint || 'Please enter a valid WhatsApp number or email.');
   }
 
-  const lookupHash = await computeContactLookupHash(check.normalized);
+  const pinCheck = normalizeChatPin(rawPin);
+  if (!pinCheck.valid) {
+    throw new Error(pinCheck.hint || 'Enter the 4-digit Chat PIN you chose when sending your message.');
+  }
+
+  const lookupHash = await computeContactLookupHash(check.normalized, pinCheck.normalized);
   if (!lookupHash) {
     throw new Error('Chat lookup is not supported in this browser.');
   }
+
+  await ensureClientAuthSession();
 
   try {
     const snap = await getDoc(doc(db, 'threadLookups', lookupHash));
@@ -169,11 +214,11 @@ export async function lookupThreadsByContact(
         threadId: String(item.threadId),
         clientName: String(item.clientName ?? 'Client'),
         businessType: String(item.businessType ?? 'Local business'),
+        chatPin: pinCheck.normalized,
         savedAt: now - idx,
       }));
 
     if (found.length > 0) {
-      // Save newest found threads into localStorage cleanly
       const existing = loadSavedClientThreads();
       const merged = [...found];
       existing.forEach((item) => {
@@ -318,8 +363,8 @@ export function buildClientNudgeAction(params: {
   const siteUrl =
     typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : '';
   const whereHint = siteUrl
-    ? `Open "My Chat" on ${siteUrl} using ${trimmedContact} to reply anytime.`
-    : `Open "My Chat" on the Summit Digital website using ${trimmedContact} to reply anytime.`;
+    ? `Open "My Chat" on ${siteUrl} using ${trimmedContact} and your 4-digit Chat PIN to reply anytime.`
+    : `Open "My Chat" on the Summit Digital website using ${trimmedContact} and your 4-digit Chat PIN to reply anytime.`;
 
   if (trimmedContact.includes('@')) {
     const subject = encodeURIComponent(`Reply from Emman — ${params.businessType} (Summit Digital)`);
@@ -373,6 +418,7 @@ export async function sendClientReply(params: {
     throw new Error('Cannot send an empty reply.');
   }
 
+  const user = await ensureClientAuthSession();
   const msgId = createMessageId('c');
   const threadRef = doc(db, 'threads', params.threadId);
   const msgRef = doc(db, 'threads', params.threadId, 'messages', msgId);
@@ -382,11 +428,11 @@ export async function sendClientReply(params: {
     threadId: params.threadId,
     senderRole: 'client',
     senderName: trimmedName.length >= 2 ? trimmedName : 'Client',
+    senderUid: user.uid,
     body: trimmedBody,
     createdAt: serverTimestamp(),
   });
   batch.update(threadRef, {
-    lastMessagePreview: buildPreview(trimmedBody),
     lastMessageBy: 'client',
     updatedAt: serverTimestamp(),
   });
@@ -402,7 +448,7 @@ export async function sendOwnerReply(params: {
   inquiryId: string;
   threadId: string | null;
   clientName: string;
-  clientContact: string;
+  clientContact?: string;
   businessType: string;
   packageChoice: string;
   initialMessage: string;
@@ -411,6 +457,11 @@ export async function sendOwnerReply(params: {
   const trimmedBody = params.body.trim().slice(0, 1500);
   if (!trimmedBody) {
     throw new Error('Please write a reply before sending.');
+  }
+
+  const ownerUid = auth.currentUser?.uid;
+  if (!ownerUid || auth.currentUser?.isAnonymous) {
+    throw new Error('Please sign in with your owner Google account before replying.');
   }
 
   const inquiryRef = doc(db, 'inquiries', params.inquiryId);
@@ -426,6 +477,7 @@ export async function sendOwnerReply(params: {
       threadId,
       senderRole: 'owner',
       senderName: 'Emman',
+      senderUid: ownerUid,
       body: trimmedBody,
       createdAt: serverTimestamp(),
     });
@@ -447,7 +499,7 @@ export async function sendOwnerReply(params: {
       handleFirestoreError(error, OperationType.WRITE, `threads/${threadId}/messages/${msgId}`);
     }
   } else {
-    // Legacy inquiry created before two-way threads existed: create thread + seed original inquiry + owner reply + lookup index
+    // Legacy inquiry created before two-way threads existed: create thread + seed original inquiry + owner reply
     const newThreadId = createThreadToken();
     const threadRef = doc(db, 'threads', newThreadId);
     const initialMsgRef = doc(db, 'threads', newThreadId, 'messages', createMessageId('0_init'));
@@ -473,6 +525,7 @@ export async function sendOwnerReply(params: {
       threadId: newThreadId,
       senderRole: 'client',
       senderName: safeName,
+      senderUid: ownerUid,
       body: safeInitialBody,
       createdAt: serverTimestamp(),
     });
@@ -480,6 +533,7 @@ export async function sendOwnerReply(params: {
       threadId: newThreadId,
       senderRole: 'owner',
       senderName: 'Emman',
+      senderUid: ownerUid,
       body: trimmedBody,
       createdAt: serverTimestamp(),
     });
@@ -488,30 +542,6 @@ export async function sendOwnerReply(params: {
       status: 'replied',
       updatedAt: serverTimestamp(),
     });
-
-    const contactCheck = normalizeContactInput(params.clientContact);
-    if (contactCheck.valid) {
-      const lookupHash = await computeContactLookupHash(contactCheck.normalized);
-      if (lookupHash) {
-        const prepared = await prepareLookupEntries(lookupHash, {
-          threadId: newThreadId,
-          businessType: safeBusiness,
-          clientName: safeName,
-        });
-        const lookupRef = doc(db, 'threadLookups', lookupHash);
-        if (prepared.exists) {
-          batch.update(lookupRef, {
-            threads: prepared.entries,
-            updatedAt: serverTimestamp(),
-          });
-        } else {
-          batch.set(lookupRef, {
-            threads: prepared.entries,
-            updatedAt: serverTimestamp(),
-          });
-        }
-      }
-    }
 
     try {
       await batch.commit();

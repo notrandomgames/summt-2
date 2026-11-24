@@ -10,12 +10,14 @@ import {
 import {
   collection,
   doc,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
   where,
   writeBatch,
+  type DocumentReference,
   type Timestamp,
 } from 'firebase/firestore';
 import {
@@ -62,8 +64,6 @@ interface InquiryRecord {
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;
 }
-
-const OWNER_EMAILS = ['summit.digitalll@gmail.com', 'emmannthiga25@gmail.com'];
 
 interface OwnerThreadPanelProps {
   inquiry: InquiryRecord;
@@ -181,7 +181,7 @@ function OwnerThreadPanel({ inquiry, threadMeta }: OwnerThreadPanelProps) {
           Saved conversation ({messages.length > 0 ? `${messages.length} messages` : 'Original message'})
         </span>
         <span className="text-[11px] text-slate-500">
-          Client can reopen under My Chat with {inquiry.contact}
+          Client can reopen under My Chat with {inquiry.contact} and their Chat PIN
         </span>
       </div>
 
@@ -328,6 +328,8 @@ export function OwnerInbox({ onBack }: OwnerInboxProps) {
   const [unauthorizedHost, setUnauthorizedHost] = useState<string | null>(null);
   const [offerRedirectFallback, setOfferRedirectFallback] = useState(false);
 
+  const ownerUser = user && !user.isAnonymous ? user : null;
+
   useEffect(() => {
     void getRedirectResult(auth).catch((err: unknown) => {
       const code = (err as { code?: string })?.code;
@@ -339,7 +341,7 @@ export function OwnerInbox({ onBack }: OwnerInboxProps) {
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
       setUser(nextUser);
       setAuthReady(true);
-      if (!nextUser) {
+      if (!nextUser || nextUser.isAnonymous) {
         setInquiries([]);
         setThreadsById({});
         setLoading(false);
@@ -349,16 +351,7 @@ export function OwnerInbox({ onBack }: OwnerInboxProps) {
   }, []);
 
   useEffect(() => {
-    if (!authReady || !user) return;
-
-    const userEmail = (user.email ?? '').toLowerCase();
-    if (!OWNER_EMAILS.includes(userEmail)) {
-      setLoading(false);
-      setErrorMsg(
-        `Signed in as ${user.email}, which is not an owner account. Sign out and choose summit.digitalll@gmail.com or emmannthiga25@gmail.com.`
-      );
-      return;
-    }
+    if (!authReady || !ownerUser) return;
 
     setLoading(true);
     setErrorMsg(null);
@@ -390,9 +383,14 @@ export function OwnerInbox({ onBack }: OwnerInboxProps) {
       },
       (error) => {
         setLoading(false);
-        setErrorMsg(
-          `Could not load inquiries for ${user.email}. Ensure you are signed in with a verified owner email.`
-        );
+        const code = (error as { code?: string })?.code ?? '';
+        if (code === 'permission-denied') {
+          setErrorMsg(
+            `Signed in as ${ownerUser.email || 'this account'}, which does not have owner access. Switch to your authorized Google account.`
+          );
+        } else {
+          setErrorMsg('Could not load inquiries right now. Please try again.');
+        }
         try {
           handleFirestoreError(error, OperationType.LIST, 'inquiries');
         } catch {
@@ -414,6 +412,7 @@ export function OwnerInbox({ onBack }: OwnerInboxProps) {
             threadId: tSnap.id,
             inquiryId: String(d.inquiryId ?? ''),
             clientName: String(d.clientName ?? ''),
+            clientUid: d.clientUid ? String(d.clientUid) : undefined,
             businessType: String(d.businessType ?? ''),
             packageChoice: String(d.packageChoice ?? ''),
             status: (d.status as ThreadRecord['status']) ?? 'new',
@@ -438,7 +437,7 @@ export function OwnerInbox({ onBack }: OwnerInboxProps) {
       unsubscribeInquiries();
       unsubscribeThreads();
     };
-  }, [authReady, user]);
+  }, [authReady, ownerUser]);
 
   const handleSignIn = async () => {
     setErrorMsg(null);
@@ -534,14 +533,24 @@ export function OwnerInbox({ onBack }: OwnerInboxProps) {
   const handleDelete = async (item: InquiryRecord) => {
     const path = `inquiries/${item.id}`;
     try {
-      const batch = writeBatch(db);
-      batch.delete(doc(db, 'inquiries', item.id));
-      if (item.threadId && threadsById[item.threadId]) {
-        batch.delete(doc(db, 'threads', item.threadId));
+      const refsToDelete: DocumentReference[] = [];
+
+      if (item.threadId && isValidThreadToken(item.threadId)) {
+        const msgSnap = await getDocs(collection(db, 'threads', item.threadId, 'messages'));
+        msgSnap.docs.forEach((msgDoc) => {
+          refsToDelete.push(msgDoc.ref);
+        });
+        refsToDelete.push(doc(db, 'threads', item.threadId));
       }
-      await batch.commit();
+      refsToDelete.push(doc(db, 'inquiries', item.id));
+
+      for (let i = 0; i < refsToDelete.length; i += 450) {
+        const batch = writeBatch(db);
+        refsToDelete.slice(i, i + 450).forEach((ref) => batch.delete(ref));
+        await batch.commit();
+      }
     } catch (error) {
-      setErrorMsg('Could not delete inquiry.');
+      setErrorMsg('Could not delete inquiry and its messages.');
       try {
         handleFirestoreError(error, OperationType.DELETE, path);
       } catch {
@@ -576,9 +585,9 @@ export function OwnerInbox({ onBack }: OwnerInboxProps) {
             Back to Summit Digital
           </button>
 
-          {user && (
+          {ownerUser && (
             <div className="flex items-center gap-3">
-              <span className="hidden text-xs text-slate-500 sm:inline">{user.email}</span>
+              <span className="hidden text-xs text-slate-500 sm:inline">{ownerUser.email}</span>
               <button
                 type="button"
                 onClick={() => void signOut(auth)}
@@ -600,15 +609,14 @@ export function OwnerInbox({ onBack }: OwnerInboxProps) {
 
         {!authReady ? (
           <p className="mt-8 text-sm text-slate-500">Loading...</p>
-        ) : !user ? (
+        ) : !ownerUser ? (
           <div className="mt-8 max-w-md rounded-xl border border-slate-200 bg-white p-6">
             <h2 className="font-display text-lg font-semibold text-slate-900">
               Sign in to view inquiries
             </h2>
             <p className="mt-1.5 text-sm text-slate-600">
-              Use your Google account (
-              <span className="font-medium text-slate-800">summit.digitalll@gmail.com</span>) to
-              read and reply to client messages.
+              Sign in with your authorized owner Google account to read and reply to client
+              messages.
             </p>
             {errorMsg && (
               <div role="alert" className="mt-3 space-y-2 text-sm font-medium text-red-700">
@@ -776,9 +784,11 @@ export function OwnerInbox({ onBack }: OwnerInboxProps) {
 
                       {!isExpanded && (
                         <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-slate-600">
-                          {threadMeta?.lastMessagePreview
-                            ? `${threadMeta.lastMessageBy === 'owner' ? 'You: ' : `${item.name}: `}${threadMeta.lastMessagePreview}`
-                            : item.message}
+                          {threadMeta?.lastMessageBy === 'client' && item.status === 'replied'
+                            ? `New message from ${item.name} — open thread to read and reply.`
+                            : threadMeta?.lastMessagePreview
+                              ? `${threadMeta.lastMessageBy === 'owner' ? 'You: ' : `${item.name}: `}${threadMeta.lastMessagePreview}`
+                              : item.message}
                         </p>
                       )}
 
