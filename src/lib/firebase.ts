@@ -1,17 +1,34 @@
 import { initializeApp } from 'firebase/app';
-import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
+import {
+  getToken,
+  initializeAppCheck,
+  ReCaptchaEnterpriseProvider,
+  ReCaptchaV3Provider,
+} from 'firebase/app-check';
 import { getAuth, GoogleAuthProvider, signInAnonymously, type User } from 'firebase/auth';
 import { doc, getDocFromServer, getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 
+const enterpriseSiteKey = (import.meta.env.VITE_RECAPTCHA_ENTERPRISE_KEY as string | undefined)?.trim();
 const recaptchaSiteKey = (import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined)?.trim();
-if (typeof window !== 'undefined' && recaptchaSiteKey) {
+const useEnterpriseProvider =
+  Boolean(enterpriseSiteKey) ||
+  (import.meta.env.VITE_RECAPTCHA_PROVIDER as string | undefined)?.trim().toLowerCase() ===
+    'enterprise';
+const activeAppCheckKey = enterpriseSiteKey || recaptchaSiteKey;
+
+if (typeof window !== 'undefined' && activeAppCheckKey) {
   try {
-    initializeAppCheck(app, {
-      provider: new ReCaptchaV3Provider(recaptchaSiteKey),
+    const appCheck = initializeAppCheck(app, {
+      provider: useEnterpriseProvider
+        ? new ReCaptchaEnterpriseProvider(activeAppCheckKey)
+        : new ReCaptchaV3Provider(activeAppCheckKey),
       isTokenAutoRefreshEnabled: true,
+    });
+    void getToken(appCheck).catch(() => {
+      // Ignore silent App Check warm-up errors (e.g. if blocked by an ad blocker)
     });
   } catch {
     // Ignore duplicate App Check initialization in dev
