@@ -1,9 +1,8 @@
 import { useState, type MouseEvent } from 'react';
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'motion/react';
-import { Check, Copy, MapPin, MessageCircle, Smartphone } from 'lucide-react';
+import { Clock, MapPin, MessageCircle, Smartphone } from 'lucide-react';
 import {
   EASE_SLOW_IN_OUT,
-  SPRING_EXAGGERATED,
   SPRING_SNAPPY,
   SQUASH_TAP,
 } from '../lib/motionPresets';
@@ -16,42 +15,42 @@ const PRESETS: Record<
     label: string;
     businessName: string;
     location: string;
+    hours: string;
     menuSample: { name: string; price: string }[];
-    tillNumber: string;
   }
 > = {
   salon: {
     label: 'Salon',
     businessName: 'Your Salon Page',
     location: 'Kilimani · Google Maps linked',
+    hours: 'Tue – Sun · 8:30 AM – 7:30 PM',
     menuSample: [
       { name: 'Medium Knotless Braids', price: 'KSh 2,500' },
       { name: 'Wash & Silk Press', price: 'KSh 1,800' },
       { name: 'Gel Manicure', price: 'KSh 1,000' },
     ],
-    tillNumber: '548 2910',
   },
   barber: {
     label: 'Barbershop',
     businessName: 'Your Barbershop Page',
     location: 'Westlands · Google Maps linked',
+    hours: 'Daily · 8:00 AM – 8:30 PM',
     menuSample: [
       { name: 'Skin Fade & Line-up', price: 'KSh 500' },
       { name: 'Cut & Beard Trim', price: 'KSh 800' },
       { name: 'Kids Cut', price: 'KSh 350' },
     ],
-    tillNumber: '712 0945',
   },
   shop: {
     label: 'Food & Shop',
     businessName: 'Your Food or Shop Page',
     location: 'Nairobi · Google Maps linked',
+    hours: 'Mon – Sat · 9:00 AM – 8:00 PM',
     menuSample: [
       { name: 'Beef Pilau Plate', price: 'KSh 450' },
       { name: 'Office Lunch Box', price: 'KSh 550' },
       { name: 'Family Platter', price: 'KSh 2,200' },
     ],
-    tillNumber: '884 1203',
   },
 };
 
@@ -61,9 +60,7 @@ interface HeroPreviewCardProps {
 
 export function HeroPreviewCard({ onStartWebsite }: HeroPreviewCardProps) {
   const [activePreset, setActivePreset] = useState<PreviewPreset>('salon');
-  const [copiedDemo, setCopiedDemo] = useState(false);
 
-  // Solid drawing in 3D: subtle pointer-driven tilt with slow-out spring
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
   const smoothX = useSpring(mouseX, { stiffness: 220, damping: 24 });
@@ -82,11 +79,6 @@ export function HeroPreviewCard({ onStartWebsite }: HeroPreviewCardProps) {
   const handleMouseLeave = () => {
     mouseX.set(0);
     mouseY.set(0);
-  };
-
-  const handleCopyPreview = () => {
-    setCopiedDemo(true);
-    setTimeout(() => setCopiedDemo(false), 1600);
   };
 
   const preset = PRESETS[activePreset];
@@ -109,7 +101,6 @@ export function HeroPreviewCard({ onStartWebsite }: HeroPreviewCardProps) {
             Preview what customers see
           </p>
 
-          {/* Hick's Law: 3 clear choices; Fitts's Law: comfortable 40px+ segmented buttons */}
           <div
             role="group"
             aria-label="Preview business type"
@@ -141,7 +132,6 @@ export function HeroPreviewCard({ onStartWebsite }: HeroPreviewCardProps) {
           </div>
         </div>
 
-        {/* Moving in arcs + overlapping follow-through when switching preview */}
         <AnimatePresence mode="wait">
           <motion.div
             key={activePreset}
@@ -159,7 +149,6 @@ export function HeroPreviewCard({ onStartWebsite }: HeroPreviewCardProps) {
               {preset.location}
             </p>
 
-            {/* Miller's Law: 3 clear price rows */}
             <ul className="mt-4 divide-y divide-slate-100 rounded-lg border border-slate-200/80 bg-slate-50/70 px-4 text-sm">
               {preset.menuSample.map((item, idx) => (
                 <motion.li
@@ -181,54 +170,17 @@ export function HeroPreviewCard({ onStartWebsite }: HeroPreviewCardProps) {
               ))}
             </ul>
 
-            {/* Secondary action + exaggerated feedback on Till copy */}
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200/80 bg-white px-4 py-3">
-              <div>
-                <p className="text-xs text-slate-500">M-Pesa Till ready</p>
-                <p className="font-mono-num text-sm font-bold text-slate-900">
-                  {preset.tillNumber}
-                </p>
-              </div>
-              <motion.button
-                type="button"
-                whileHover={{ scale: 1.03 }}
-                whileTap={SQUASH_TAP}
-                onClick={handleCopyPreview}
-                className="inline-flex min-h-[40px] cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-50"
-              >
-                <AnimatePresence mode="wait">
-                  {copiedDemo ? (
-                    <motion.span
-                      key="copied"
-                      initial={{ scale: 0.7, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.8, opacity: 0 }}
-                      transition={SPRING_EXAGGERATED}
-                      className="inline-flex items-center gap-1.5 text-[#0F5C43]"
-                    >
-                      <Check className="h-3.5 w-3.5" />
-                      Copied
-                    </motion.span>
-                  ) : (
-                    <motion.span
-                      key="copy"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="inline-flex items-center gap-1.5"
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                      Copy Till
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              </motion.button>
+            <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-slate-200/80 bg-white px-4 py-3 text-xs text-slate-600">
+              <span className="inline-flex items-center gap-1.5 font-medium text-slate-700">
+                <Clock className="h-3.5 w-3.5 text-[#0F5C43]" />
+                Opening hours
+              </span>
+              <span className="text-slate-600">{preset.hours}</span>
             </div>
           </motion.div>
         </AnimatePresence>
       </div>
 
-      {/* Frequency of use: primary action right inside preview card */}
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
         <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
           <Smartphone className="h-3.5 w-3.5 text-[#0F5C43]" />

@@ -2,8 +2,6 @@ import { useState } from 'react';
 import { motion } from 'motion/react';
 import {
   ArrowLeft,
-  Check,
-  Copy,
   MapPin,
   MessageCircle,
   Minus,
@@ -50,23 +48,12 @@ export function SampleCatererPage({ onBack }: SampleCatererPageProps) {
   const [includeChafers, setIncludeChafers] = useState(false);
   const [eventDate, setEventDate] = useState('');
   const [eventArea, setEventArea] = useState('Nairobi (Kilimani / Westlands / CBD)');
-  const [copiedTill, setCopiedTill] = useState(false);
 
   const selectedMenu = CATERING_MENUS.find((m) => m.id === selectedMenuId) || CATERING_MENUS[0];
   const foodSubtotal = selectedMenu.pricePerPlate * guests;
   const juiceTotal = includeJuice ? 120 * guests : 0;
   const chaferTotal = includeChafers ? 3500 : 0;
   const estimatedTotal = foodSubtotal + juiceTotal + chaferTotal;
-
-  const handleCopyTill = async () => {
-    try {
-      await navigator.clipboard.writeText('8841203');
-    } catch {
-      // Ignore clipboard failure
-    }
-    setCopiedTill(true);
-    setTimeout(() => setCopiedTill(false), 2200);
-  };
 
   const whatsappOrder = `Hi Mama Wanjiku Kitchen, I'd like a quote for ${guests} guests: ${selectedMenu.name} (KSh ${selectedMenu.pricePerPlate}/plate)${
     includeJuice ? ' + Fresh Juice' : ''
@@ -85,10 +72,10 @@ export function SampleCatererPage({ onBack }: SampleCatererPageProps) {
             className="inline-flex min-h-[40px] cursor-pointer items-center gap-1.5 font-medium text-white hover:underline"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Summit
+            Back to Summit Digital
           </motion.button>
           <span className="text-stone-300">
-            Sample project built by Emmanuel Nthiga · Local Catering Demo
+            Sample project built by Emman · Local Catering Demo
           </span>
         </div>
       </div>
@@ -347,31 +334,6 @@ export function SampleCatererPage({ onBack }: SampleCatererPageProps) {
                 <MessageCircle className="h-4 w-4" />
                 Send Quote on WhatsApp
               </motion.a>
-
-              <div className="mt-5 flex items-center justify-between border-t border-stone-200 pt-4">
-                <div>
-                  <p className="text-xs text-stone-500">Deposit via M-Pesa Till</p>
-                  <p className="font-mono-num text-base font-bold text-stone-900">884 1203</p>
-                </div>
-                <motion.button
-                  type="button"
-                  whileTap={SQUASH_TAP}
-                  onClick={handleCopyTill}
-                  className="inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-lg border border-stone-300 px-3.5 py-1.5 text-xs font-medium text-stone-800 hover:bg-stone-50"
-                >
-                  {copiedTill ? (
-                    <>
-                      <Check className="h-3.5 w-3.5 text-[#0F5C43]" />
-                      Copied
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-3.5 w-3.5" />
-                      Copy Till
-                    </>
-                  )}
-                </motion.button>
-              </div>
             </div>
           </div>
         </section>

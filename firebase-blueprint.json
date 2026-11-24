@@ -28,8 +28,8 @@
           "description": "Selected website package tier.",
           "enum": [
             "Starter Page (From KSh 200)",
-            "Full Local Business Site (From KSh 4,500)",
-            "Custom Order & Booking Site (From KSh 9,500)",
+            "Full Local Business Site (From KSh 300)",
+            "Custom Order & Booking Site (From KSh 500)",
             "Not sure yet — help me choose"
           ],
           "maxLength": 80

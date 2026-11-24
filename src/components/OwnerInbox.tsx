@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
+  getRedirectResult,
   onAuthStateChanged,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
   type User,
 } from 'firebase/auth';
@@ -40,15 +42,27 @@ interface InquiryRecord {
   createdAt?: Timestamp | null;
 }
 
+const OWNER_EMAILS = ['summit.digitalll@gmail.com', 'emmannthiga25@gmail.com'];
+
 export function OwnerInbox({ onBack }: OwnerInboxProps) {
   const [user, setUser] = useState<User | null>(auth.currentUser);
   const [authReady, setAuthReady] = useState(false);
   const [inquiries, setInquiries] = useState<InquiryRecord[]>([]);
   const [statusFilter, setStatusFilter] = useState<'all' | 'new' | 'replied' | 'archived'>('all');
   const [loading, setLoading] = useState(true);
+  const [signingIn, setSigningIn] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [offerRedirectFallback, setOfferRedirectFallback] = useState(false);
 
   useEffect(() => {
+    // Handle redirect sign-in completion if popup fallback was used
+    void getRedirectResult(auth).catch((err: unknown) => {
+      const code = (err as { code?: string })?.code;
+      if (code && code !== 'auth/no-auth-event') {
+        setErrorMsg(`Sign-in error (${code}). Please try again.`);
+      }
+    });
+
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
       setUser(nextUser);
       setAuthReady(true);
@@ -62,6 +76,15 @@ export function OwnerInbox({ onBack }: OwnerInboxProps) {
 
   useEffect(() => {
     if (!authReady || !user) return;
+
+    const userEmail = (user.email ?? '').toLowerCase();
+    if (!OWNER_EMAILS.includes(userEmail)) {
+      setLoading(false);
+      setErrorMsg(
+        `Signed in as ${user.email}, which is not an owner account. Sign out and choose summit.digitalll@gmail.com or emmannthiga25@gmail.com.`
+      );
+      return;
+    }
 
     setLoading(true);
     setErrorMsg(null);
@@ -90,7 +113,9 @@ export function OwnerInbox({ onBack }: OwnerInboxProps) {
       },
       (error) => {
         setLoading(false);
-        setErrorMsg('You do not have permission to view inquiries with this account.');
+        setErrorMsg(
+          `Could not load inquiries for ${user.email}. Ensure you are signed in with a verified owner email.`
+        );
         try {
           handleFirestoreError(error, OperationType.LIST, 'inquiries');
         } catch {
@@ -104,11 +129,53 @@ export function OwnerInbox({ onBack }: OwnerInboxProps) {
 
   const handleSignIn = async () => {
     setErrorMsg(null);
+    setOfferRedirectFallback(false);
+    setSigningIn(true);
+    googleAuthProvider.setCustomParameters({ prompt: 'select_account' });
+
     try {
       await signInWithPopup(auth, googleAuthProvider);
-    } catch {
-      setErrorMsg('Sign-in was cancelled or blocked. Please allow the pop-up and try again.');
+    } catch (err: unknown) {
+      const firebaseErr = err as { code?: string; message?: string };
+      const code = firebaseErr?.code || 'unknown';
+
+      if (
+        code === 'auth/popup-blocked' ||
+        code === 'auth/cancelled-popup-request' ||
+        code === 'auth/operation-not-supported-in-this-environment'
+      ) {
+        setOfferRedirectFallback(true);
+        setErrorMsg(
+          'Your browser blocked the Google sign-in popup. Click "Continue with redirect" below, or allow popups for this site.'
+        );
+      } else if (code === 'auth/popup-closed-by-user') {
+        setErrorMsg('Sign-in window was closed before completing. Click below to try again.');
+      } else if (code === 'auth/unauthorized-domain') {
+        setErrorMsg(
+          `Domain ${window.location.hostname} is not authorized in Firebase Authentication settings yet.`
+        );
+      } else {
+        setErrorMsg(`Google sign-in failed (${code}). Please try again.`);
+      }
+    } finally {
+      setSigningIn(false);
     }
+  };
+
+  const handleRedirectSignIn = async () => {
+    setErrorMsg(null);
+    googleAuthProvider.setCustomParameters({ prompt: 'select_account' });
+    try {
+      await signInWithRedirect(auth, googleAuthProvider);
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code || 'unknown';
+      setErrorMsg(`Redirect sign-in failed (${code}).`);
+    }
+  };
+
+  const handleSwitchAccount = async () => {
+    await signOut(auth);
+    await handleSignIn();
   };
 
   const handleStatusChange = async (
@@ -157,10 +224,10 @@ export function OwnerInbox({ onBack }: OwnerInboxProps) {
           <button
             type="button"
             onClick={onBack}
-            className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-700 hover:text-slate-900"
+            className="inline-flex min-h-[40px] cursor-pointer items-center gap-2 text-sm font-medium text-slate-700 hover:text-slate-900"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Summit
+            Back to Summit Digital
           </button>
 
           {user && (
@@ -182,7 +249,7 @@ export function OwnerInbox({ onBack }: OwnerInboxProps) {
       <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
         <h1 className="font-display text-2xl font-bold text-slate-900">Owner Inbox</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Client messages submitted from the website contact form.
+          Client messages submitted from the Summit Digital contact form.
         </p>
 
         {!authReady ? (
@@ -193,20 +260,32 @@ export function OwnerInbox({ onBack }: OwnerInboxProps) {
               Sign in to view inquiries
             </h2>
             <p className="mt-1.5 text-sm text-slate-600">
-              Only the verified site owner account can read or update client messages.
+              Use your Google account (<span className="font-medium text-slate-800">summit.digitalll@gmail.com</span>) to read or update client messages.
             </p>
             {errorMsg && (
               <p role="alert" className="mt-3 text-sm font-medium text-red-700">
                 {errorMsg}
               </p>
             )}
-            <button
-              type="button"
-              onClick={handleSignIn}
-              className="mt-5 inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-lg bg-[#0F5C43] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#0B4734]"
-            >
-              Sign in with Google
-            </button>
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                disabled={signingIn}
+                onClick={() => void handleSignIn()}
+                className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-lg bg-[#0F5C43] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#0B4734] disabled:opacity-60"
+              >
+                {signingIn ? 'Opening Google...' : 'Sign in with Google'}
+              </button>
+              {offerRedirectFallback && (
+                <button
+                  type="button"
+                  onClick={() => void handleRedirectSignIn()}
+                  className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50"
+                >
+                  Continue with redirect
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           <div className="mt-6">
@@ -233,9 +312,19 @@ export function OwnerInbox({ onBack }: OwnerInboxProps) {
             </div>
 
             {errorMsg && (
-              <p role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                {errorMsg}
-              </p>
+              <div
+                role="alert"
+                className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+              >
+                <span>{errorMsg}</span>
+                <button
+                  type="button"
+                  onClick={() => void handleSwitchAccount()}
+                  className="cursor-pointer font-semibold underline underline-offset-2 hover:text-red-900"
+                >
+                  Switch Google account
+                </button>
+              </div>
             )}
 
             {loading ? (

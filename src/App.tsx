@@ -531,7 +531,7 @@ export default function App() {
           <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-6 px-4 text-sm text-slate-600 sm:flex-row sm:items-center sm:px-6">
             <div>
               <p className="font-display font-semibold text-slate-900">
-                {CONTACT_INFO.brandName} · {CONTACT_INFO.ownerName}
+                {CONTACT_INFO.brandName} · Built by {CONTACT_INFO.ownerName}
               </p>
               <p className="mt-1 text-xs text-slate-500">
                 Simple websites for Kenyan businesses · {CONTACT_INFO.city}

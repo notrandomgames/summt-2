@@ -30,6 +30,7 @@ service cloud.firestore {
     function isAdmin() {
       return isVerifiedUser() && (
         request.auth.token.email == 'emmannthiga25@gmail.com' ||
+        request.auth.token.email == 'summit.digitalll@gmail.com' ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
     }
@@ -37,8 +38,8 @@ service cloud.firestore {
     function isValidPackageChoice(choice) {
       return choice in [
         'Starter Page (From KSh 200)',
-        'Full Local Business Site (From KSh 4,500)',
-        'Custom Order & Booking Site (From KSh 9,500)',
+        'Full Local Business Site (From KSh 300)',
+        'Custom Order & Booking Site (From KSh 500)',
         'Not sure yet — help me choose'
       ];
     }

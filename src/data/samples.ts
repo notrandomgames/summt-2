@@ -1,11 +1,11 @@
 export const CONTACT_INFO = {
-  ownerName: 'Emmanuel Nthiga',
-  brandName: 'Summit',
+  ownerName: 'Emman',
+  brandName: 'Summit Digital',
   city: 'Nairobi, Kenya',
-  phoneDisplay: '0700 000 000',
-  phoneHref: 'tel:+254700000000',
-  whatsappNumber: '254700000000',
-  email: 'emmannthiga25@gmail.com',
+  phoneDisplay: '0700447805',
+  phoneHref: 'tel:+254700447805',
+  whatsappNumber: '254700447805',
+  email: 'summit.digitalll@gmail.com',
   instagramHandle: '@summit._digital',
   instagramUrl: 'https://instagram.com/summit._digital',
 } as const;
@@ -13,7 +13,7 @@ export const CONTACT_INFO = {
 export function getWhatsAppUrl(prefillText?: string): string {
   const text =
     prefillText ??
-    'Hi Emmanuel, I saw your website and I would like to ask about a website for my business.';
+    'Hi Emman, I saw Summit Digital and I would like to ask about a website for my business.';
   return `https://wa.me/${CONTACT_INFO.whatsappNumber}?text=${encodeURIComponent(text)}`;
 }
 
@@ -42,8 +42,8 @@ export const SAMPLE_PROJECTS: SampleProjectMeta[] = [
     imageAlt:
       'Interior of Zuri Hair & Beauty Salon in Kilimani with styling mirrors and natural hair products',
     summary:
-      'A mobile-friendly salon page with a full KSh price menu for braids, silk press, and nails, plus one-tap WhatsApp booking and M-Pesa Till details.',
-    includedFeatures: ['KSh price list', 'WhatsApp booking', 'M-Pesa Till copy', 'Google Maps pin'],
+      'A mobile-friendly salon page with a full KSh price menu for braids, silk press, and nails, plus one-tap WhatsApp booking and Google Maps directions.',
+    includedFeatures: ['KSh price list', 'WhatsApp booking', 'Opening hours', 'Google Maps pin'],
   },
   {
     slug: 'barbershop',
@@ -55,7 +55,7 @@ export const SAMPLE_PROJECTS: SampleProjectMeta[] = [
     imageAlt: 'Clean barbershop interior in Nairobi with leather chairs and wooden counters',
     summary:
       'Built for walk-ins and regulars to check fade and beard trim prices, pick a free time slot, and reserve their chair on WhatsApp.',
-    includedFeatures: ['Grooming menu', 'Time slot picker', 'WhatsApp booking', 'M-Pesa Till copy'],
+    includedFeatures: ['Grooming menu', 'Time slot picker', 'WhatsApp booking', 'Westlands map'],
   },
   {
     slug: 'caterer',
@@ -98,9 +98,9 @@ export const SERVICES: ServiceItem[] = [
   },
   {
     number: '04.',
-    title: 'M-Pesa-Ready Checkout & Till Info',
+    title: 'Interactive Price & Booking Menus',
     description:
-      'Your M-Pesa Till or Paybill sits clearly on the page with a one-tap copy button, alongside simple order or booking calculators that match your prices.',
+      'Customers tap the exact haircut, braid style, or meal package they want, see the total in shillings, and send the full order straight to your WhatsApp.',
   },
 ];
 
@@ -125,28 +125,28 @@ export const PRICING_TIERS: PricingTier[] = [
       'Service or product price list in KSh',
       'Direct WhatsApp chat button',
       'Google Maps location link',
-      'M-Pesa Till or Paybill display',
+      'Opening hours & phone number',
     ],
   },
   {
     name: 'Full Local Business Site',
-    price: 'From KSh 4,500',
-    timeline: 'Ready in 4–7 days',
+    price: 'From KSh 300',
+    timeline: 'Ready in 2–4 days',
     description:
-      'For salons, barbershops, clinics, and retail shops that want a proper website customers find on Google.',
+      'For salons, barbershops, clinics, and retail shops that want a complete website customers find on Google.',
     items: [
       'Multi-section website with photo gallery',
       'Google Business Profile & Maps setup',
       'Pre-filled WhatsApp booking form',
-      'M-Pesa Till copy & payment guide',
+      'Clear service menu in KSh',
       'Fast loading on mobile data',
     ],
     recommended: true,
   },
   {
     name: 'Custom Order & Booking Site',
-    price: 'From KSh 9,500',
-    timeline: 'Ready in 1–2 weeks',
+    price: 'From KSh 500',
+    timeline: 'Ready in 4–7 days',
     description:
       'For caterers, food spots, and busy shops that need an interactive quote calculator or multi-category menu.',
     items: [

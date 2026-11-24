@@ -3,7 +3,6 @@ import { motion } from 'motion/react';
 import {
   ArrowLeft,
   Check,
-  Copy,
   MapPin,
   Clock,
   MessageCircle,
@@ -40,7 +39,6 @@ export function SampleSalonPage({ onBack }: SampleSalonPageProps) {
   const [stylist, setStylist] = useState('Any available stylist');
   const [dayTime, setDayTime] = useState('Saturday · 10:00 AM');
   const [clientName, setClientName] = useState('');
-  const [copiedTill, setCopiedTill] = useState(false);
   const [bookingPrepared, setBookingPrepared] = useState(false);
 
   const visibleServices =
@@ -54,16 +52,6 @@ export function SampleSalonPage({ onBack }: SampleSalonPageProps) {
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
     setBookingPrepared(false);
-  };
-
-  const handleCopyTill = async () => {
-    try {
-      await navigator.clipboard.writeText('5482910');
-    } catch {
-      // Ignore clipboard failure
-    }
-    setCopiedTill(true);
-    setTimeout(() => setCopiedTill(false), 2200);
   };
 
   const whatsappMessage = `Hi Zuri Salon, I'd like to book: ${
@@ -85,10 +73,10 @@ export function SampleSalonPage({ onBack }: SampleSalonPageProps) {
             className="inline-flex min-h-[40px] cursor-pointer items-center gap-1.5 font-medium text-white hover:underline"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Summit
+            Back to Summit Digital
           </motion.button>
           <span className="text-stone-300">
-            Sample project built by Emmanuel Nthiga · Local Salon Demo
+            Sample project built by Emman · Local Salon Demo
           </span>
         </div>
       </div>
@@ -330,33 +318,6 @@ export function SampleSalonPage({ onBack }: SampleSalonPageProps) {
                       WhatsApp message prepared for Zuri Hair & Beauty (sample demo).
                     </p>
                   )}
-                </div>
-              </div>
-
-              <div className="mt-6 border-t border-stone-200 pt-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-medium text-stone-500">Lipa na M-Pesa · Buy Goods Till</p>
-                    <p className="font-mono-num text-base font-bold text-stone-900">548 2910</p>
-                  </div>
-                  <motion.button
-                    type="button"
-                    whileTap={SQUASH_TAP}
-                    onClick={handleCopyTill}
-                    className="inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3.5 py-1.5 text-xs font-medium text-stone-800 hover:bg-stone-50"
-                  >
-                    {copiedTill ? (
-                      <>
-                        <Check className="h-3.5 w-3.5 text-[#0F5C43]" />
-                        Copied
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3.5 w-3.5" />
-                        Copy Till
-                      </>
-                    )}
-                  </motion.button>
                 </div>
               </div>
             </div>

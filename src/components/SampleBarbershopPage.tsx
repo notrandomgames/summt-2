@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, Check, Copy, MapPin, Clock, MessageCircle } from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, MessageCircle } from 'lucide-react';
 import { ANTICIPATION_HOVER, SQUASH_TAP } from '../lib/motionPresets';
 
 interface SampleBarbershopPageProps {
@@ -28,19 +28,8 @@ export function SampleBarbershopPage({ onBack }: SampleBarbershopPageProps) {
   const [selectedCutId, setSelectedCutId] = useState('exec');
   const [selectedSlot, setSelectedSlot] = useState(TIME_SLOTS[0]);
   const [barber, setBarber] = useState('Brian (Senior Barber)');
-  const [copiedTill, setCopiedTill] = useState(false);
 
   const selectedCut = CUT_MENU.find((c) => c.id === selectedCutId) || CUT_MENU[0];
-
-  const handleCopyTill = async () => {
-    try {
-      await navigator.clipboard.writeText('7120945');
-    } catch {
-      // Ignore clipboard failure
-    }
-    setCopiedTill(true);
-    setTimeout(() => setCopiedTill(false), 2200);
-  };
 
   const whatsappText = `Hi Kicks & Clips Westlands, I'd like to book ${selectedCut.name} (KSh ${selectedCut.price}) for ${selectedSlot} with ${barber}.`;
 
@@ -55,10 +44,10 @@ export function SampleBarbershopPage({ onBack }: SampleBarbershopPageProps) {
             className="inline-flex min-h-[40px] cursor-pointer items-center gap-1.5 font-medium text-white hover:underline"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Summit
+            Back to Summit Digital
           </motion.button>
           <span className="text-zinc-400">
-            Sample project built by Emmanuel Nthiga · Local Barbershop Demo
+            Sample project built by Emman · Local Barbershop Demo
           </span>
         </div>
       </div>
@@ -100,7 +89,7 @@ export function SampleBarbershopPage({ onBack }: SampleBarbershopPageProps) {
               Sharp fades, clean beard work, zero queue waiting.
             </h1>
             <p className="mt-4 max-w-xl text-base leading-relaxed text-zinc-600">
-              Pick your haircut and time slot below so your barber is ready when you walk in. Pay via M-Pesa Till at the counter.
+              Pick your haircut and time slot below so your barber is ready when you walk in.
             </p>
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <motion.a
@@ -232,31 +221,6 @@ export function SampleBarbershopPage({ onBack }: SampleBarbershopPageProps) {
                 <MessageCircle className="h-4 w-4" />
                 Reserve Chair on WhatsApp
               </motion.a>
-
-              <div className="mt-5 flex items-center justify-between border-t border-zinc-200 pt-4">
-                <div>
-                  <p className="text-xs text-zinc-500">M-Pesa Buy Goods Till</p>
-                  <p className="font-mono-num text-base font-bold text-zinc-900">712 0945</p>
-                </div>
-                <motion.button
-                  type="button"
-                  whileTap={SQUASH_TAP}
-                  onClick={handleCopyTill}
-                  className="inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded-lg border border-zinc-300 px-3.5 py-1.5 text-xs font-medium text-zinc-800 hover:bg-zinc-50"
-                >
-                  {copiedTill ? (
-                    <>
-                      <Check className="h-3.5 w-3.5 text-[#0F5C43]" />
-                      Copied
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-3.5 w-3.5" />
-                      Copy Till
-                    </>
-                  )}
-                </motion.button>
-              </div>
             </div>
           </div>
         </section>

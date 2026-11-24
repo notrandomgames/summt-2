@@ -31,7 +31,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               Something went wrong
             </h1>
             <p className="mt-2 text-sm text-slate-600">
-              Please refresh the page or message emmannthiga25@gmail.com directly if the problem continues.
+              Please refresh the page or message summit.digitalll@gmail.com directly if the problem continues.
             </p>
             <button
               type="button"

@@ -22,8 +22,8 @@ interface SavedInquiry {
 
 export const PACKAGE_OPTIONS = [
   'Starter Page (From KSh 200)',
-  'Full Local Business Site (From KSh 4,500)',
-  'Custom Order & Booking Site (From KSh 9,500)',
+  'Full Local Business Site (From KSh 300)',
+  'Custom Order & Booking Site (From KSh 500)',
   'Not sure yet — help me choose',
 ] as const;
 
@@ -162,14 +162,14 @@ export function ContactForm({ selectedPackage }: ContactFormProps) {
   const buildMailtoHref = (data: SavedInquiry) => {
     const subject = encodeURIComponent(`Website inquiry from ${data.name} (${data.businessType})`);
     const body = encodeURIComponent(
-      `Hi Emmanuel,\n\nName: ${data.name}\nContact: ${data.contact}\nBusiness: ${data.businessType}\nPackage: ${data.packageChoice}\n\nDetails:\n${data.message}`
+      `Hi Emman,\n\nName: ${data.name}\nContact: ${data.contact}\nBusiness: ${data.businessType}\nPackage: ${data.packageChoice}\n\nDetails:\n${data.message}`
     );
     return `mailto:${CONTACT_INFO.email}?subject=${subject}&body=${body}`;
   };
 
   const buildWhatsAppHref = (data: SavedInquiry) => {
     return getWhatsAppUrl(
-      `Hi Emmanuel, I'm ${data.name} (${data.businessType}). I'm interested in the ${data.packageChoice}. ${data.message}`
+      `Hi Emman, I'm ${data.name} (${data.businessType}). I'm interested in the ${data.packageChoice}. ${data.message}`
     );
   };
 
@@ -397,7 +397,7 @@ export function ContactForm({ selectedPackage }: ContactFormProps) {
                 transition={SPRING_SNAPPY}
                 className="inline-flex min-h-[50px] w-full cursor-pointer items-center justify-center rounded-lg bg-[#0F5C43] px-7 py-3 text-base font-semibold text-white transition-colors hover:bg-[#0B4734] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0F5C43] sm:w-auto"
               >
-                {submitting ? 'Sending...' : 'Send message to Emmanuel'}
+                {submitting ? 'Sending...' : 'Send message to Emman'}
               </motion.button>
 
               <motion.a

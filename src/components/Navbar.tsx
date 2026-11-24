@@ -46,7 +46,7 @@ export function Navbar({ onNavigateSection }: NavbarProps) {
               fill="#0F5C43"
             />
           </svg>
-          <span>summit</span>
+          <span>summit digital</span>
         </motion.a>
 
         {/* Zone 2: Concise single-line navigation links */}
