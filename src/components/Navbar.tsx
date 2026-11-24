@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Menu, X } from 'lucide-react';
+import { Menu, MessageSquare, X } from 'lucide-react';
 import { ANTICIPATION_HOVER, EASE_SLOW_IN_OUT, SQUASH_TAP } from '../lib/motionPresets';
 
 interface NavbarProps {
   onNavigateSection: (sectionId: string) => void;
+  onOpenChat: () => void;
+  savedChatCount?: number;
 }
 
-export function Navbar({ onNavigateSection }: NavbarProps) {
+export function Navbar({ onNavigateSection, onOpenChat, savedChatCount = 0 }: NavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleLinkClick = (sectionId: string) => {
@@ -74,8 +76,23 @@ export function Navbar({ onNavigateSection }: NavbarProps) {
           ))}
         </nav>
 
-        {/* Zone 3: Single primary action + mobile menu toggle */}
-        <div className="flex items-center gap-3 shrink-0">
+        {/* Zone 3: My Chat + primary action + mobile menu toggle */}
+        <div className="flex items-center gap-2.5 shrink-0">
+          <motion.button
+            type="button"
+            whileTap={SQUASH_TAP}
+            onClick={onOpenChat}
+            className="hidden min-h-[44px] cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 whitespace-nowrap shrink-0 transition-colors hover:border-[#0F5C43] hover:text-[#0F5C43] md:inline-flex"
+          >
+            <MessageSquare className="h-4 w-4 text-[#0F5C43]" />
+            <span>My Chat</span>
+            {savedChatCount > 0 && (
+              <span className="font-mono-num rounded-md bg-[#0F5C43]/10 px-1.5 py-0.5 text-xs font-semibold text-[#0F5C43]">
+                {savedChatCount}
+              </span>
+            )}
+          </motion.button>
+
           <motion.a
             href="#contact"
             onClick={(e) => {
@@ -131,6 +148,18 @@ export function Navbar({ onNavigateSection }: NavbarProps) {
                   {item.label}
                 </a>
               ))}
+              <motion.button
+                type="button"
+                whileTap={SQUASH_TAP}
+                onClick={() => {
+                  setMobileOpen(false);
+                  onOpenChat();
+                }}
+                className="mt-2 flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-800 hover:bg-slate-50"
+              >
+                <MessageSquare className="h-4 w-4 text-[#0F5C43]" />
+                <span>My Chat{savedChatCount > 0 ? ` (${savedChatCount})` : ''}</span>
+              </motion.button>
               <motion.a
                 whileTap={SQUASH_TAP}
                 href="#contact"
@@ -138,7 +167,7 @@ export function Navbar({ onNavigateSection }: NavbarProps) {
                   e.preventDefault();
                   handleLinkClick('contact');
                 }}
-                className="mt-2 flex min-h-[48px] items-center justify-center rounded-lg bg-[#0F5C43] px-4 py-3 text-base font-semibold text-white hover:bg-[#0B4734]"
+                className="mt-1.5 flex min-h-[48px] items-center justify-center rounded-lg bg-[#0F5C43] px-4 py-3 text-base font-semibold text-white hover:bg-[#0B4734]"
               >
                 Message me
               </motion.a>

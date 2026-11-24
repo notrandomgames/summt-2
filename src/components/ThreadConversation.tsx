@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
-import { Check, Copy, MessageCircle, Send } from 'lucide-react';
+import { MessageCircle, Send } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { CONTACT_INFO, getWhatsAppUrl } from '../data/samples';
 import {
   formatMessageTime,
-  getThreadShareUrl,
   isValidThreadToken,
   sendClientReply,
   sortMessagesChronologically,
@@ -35,7 +34,6 @@ export function ThreadConversation({
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [copiedLink, setCopiedLink] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -162,17 +160,6 @@ export function ThreadConversation({
     }
   };
 
-  const handleCopyLink = async () => {
-    const url = getThreadShareUrl(threadId);
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopiedLink(true);
-      window.setTimeout(() => setCopiedLink(false), 2500);
-    } catch {
-      setErrorMsg(`Save this link to check replies later: ${url}`);
-    }
-  };
-
   if (notFound && !loading) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-700">
@@ -180,7 +167,7 @@ export function ThreadConversation({
           This conversation could not be found.
         </p>
         <p className="mt-1.5 text-slate-600">
-          It may have been removed or the link may be incomplete. You can send a new message below or WhatsApp Emman directly.
+          It may have been removed. You can start a new message or WhatsApp Emman directly.
         </p>
         {onStartNewInquiry && (
           <button
@@ -222,31 +209,17 @@ export function ThreadConversation({
             {displayBusiness}
           </h3>
           {displayPackage && <p className="text-xs text-slate-500">{displayPackage}</p>}
+          <p className="mt-1 text-[11px] text-slate-500">
+            Reopen anytime from <span className="font-semibold text-slate-700">My Chat</span> on this website using your WhatsApp number or email.
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void handleCopyLink()}
-            className="inline-flex min-h-[38px] cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-          >
-            {copiedLink ? (
-              <>
-                <Check className="h-3.5 w-3.5 text-[#0F5C43]" />
-                <span>Link copied</span>
-              </>
-            ) : (
-              <>
-                <Copy className="h-3.5 w-3.5" />
-                <span>Save chat link</span>
-              </>
-            )}
-          </button>
           {onStartNewInquiry && (
             <button
               type="button"
               onClick={onStartNewInquiry}
-              className="inline-flex min-h-[38px] cursor-pointer items-center rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-600 underline underline-offset-4 hover:text-slate-900"
+              className="inline-flex min-h-[38px] cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
             >
               New inquiry
             </button>

@@ -187,6 +187,22 @@
       },
       "required": ["threadId", "senderRole", "senderName", "body", "createdAt"]
     },
+    "ThreadLookup": {
+      "title": "ThreadLookup",
+      "description": "SHA-256 contact-hash index mapping a client's phone or email hash to their saved thread IDs so they can reopen chats directly from the site without a link.",
+      "type": "object",
+      "properties": {
+        "threads": {
+          "type": "array",
+          "description": "Bounded list of thread references for this contact hash (up to 10)."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["threads", "updatedAt"]
+    },
     "Admin": {
       "title": "Admin",
       "description": "Authorized owner record allowed to view and manage client inquiries.",
@@ -223,6 +239,12 @@
         "$ref": "#/entities/ThreadMessage"
       },
       "description": "Saved chronological replies between a client and Emman."
+    },
+    "/threadLookups/{lookupHash}": {
+      "schema": {
+        "$ref": "#/entities/ThreadLookup"
+      },
+      "description": "SHA-256 hashed contact index enabling direct chat lookup on any device without exposing raw contact lists."
     },
     "/admins/{adminId}": {
       "schema": {

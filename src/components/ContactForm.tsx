@@ -6,12 +6,16 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { CONTACT_INFO, getWhatsAppUrl } from '../data/samples';
 import {
   buildPreview,
+  computeContactLookupHash,
   createMessageId,
   createThreadToken,
   loadSavedClientThreads,
+  normalizeContactInput,
+  prepareLookupEntries,
   saveClientThreadRef,
   type SavedClientThreadRef,
 } from '../lib/threads';
+import { ContactLookupBar } from './ContactLookupBar';
 import { ThreadConversation } from './ThreadConversation';
 import {
   ANTICIPATION_HOVER,
@@ -46,44 +50,6 @@ interface ContactFormProps {
 function createInquiryId(): string {
   const randomPart = Math.random().toString(36).slice(2, 10);
   return `inq_${Date.now().toString(36)}_${randomPart}`;
-}
-
-/**
- * Postel's Law: Be liberal in what we accept.
- * Accepts Kenyan phone numbers with spaces, dashes, 07xx, 01xx, +254, 254,
- * or standard email addresses, and normalizes them cleanly.
- */
-function normalizeContactInput(raw: string): { valid: boolean; normalized: string; hint?: string } {
-  const trimmed = raw.trim();
-  if (!trimmed) return { valid: false, normalized: '', hint: 'Enter a WhatsApp number or email.' };
-
-  if (trimmed.includes('@')) {
-    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(trimmed);
-    return emailOk
-      ? { valid: true, normalized: trimmed.toLowerCase(), hint: 'Email detected' }
-      : { valid: false, normalized: trimmed, hint: 'Check email format (e.g. name@gmail.com).' };
-  }
-
-  const digitsOnly = trimmed.replace(/[\s\-()]/g, '');
-  if (/^\+?254[17]\d{8}$/.test(digitsOnly)) {
-    const clean = digitsOnly.startsWith('+') ? digitsOnly : `+${digitsOnly}`;
-    return { valid: true, normalized: clean, hint: 'Kenyan WhatsApp / phone number' };
-  }
-  if (/^0[17]\d{8}$/.test(digitsOnly)) {
-    return {
-      valid: true,
-      normalized: `+254${digitsOnly.slice(1)}`,
-      hint: 'Kenyan WhatsApp / phone number',
-    };
-  }
-  if (trimmed.length >= 7) {
-    return { valid: true, normalized: trimmed };
-  }
-  return {
-    valid: false,
-    normalized: trimmed,
-    hint: 'Use e.g. 0712 345 678, +254 712 345 678, or an email.',
-  };
 }
 
 export function ContactForm({
@@ -204,6 +170,27 @@ export function ContactForm({
         createdAt: serverTimestamp(),
       });
 
+      const lookupHash = await computeContactLookupHash(trimmedContact);
+      if (lookupHash) {
+        const prepared = await prepareLookupEntries(lookupHash, {
+          threadId,
+          businessType: trimmedBusiness,
+          clientName: trimmedName,
+        });
+        const lookupRef = doc(db, 'threadLookups', lookupHash);
+        if (prepared.exists) {
+          batch.update(lookupRef, {
+            threads: prepared.entries,
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          batch.set(lookupRef, {
+            threads: prepared.entries,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
+
       await batch.commit();
 
       const nextSaved = saveClientThreadRef({
@@ -236,8 +223,19 @@ export function ContactForm({
 
   const activeSavedMeta = savedThreads.find((t) => t.threadId === activeThreadId) ?? null;
 
+  const handleThreadsFound = (found: SavedClientThreadRef[]) => {
+    const nextSaved = loadSavedClientThreads();
+    setSavedThreads(nextSaved);
+    onSavedThreadsChange?.(nextSaved);
+    if (found[0]) {
+      setActiveThreadId(found[0].threadId);
+    }
+  };
+
   return (
     <div className="space-y-4">
+      <ContactLookupBar compact onThreadsFound={handleThreadsFound} />
+
       {savedThreads.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3">
           <div className="flex flex-wrap items-center gap-2">

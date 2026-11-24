@@ -1,5 +1,6 @@
 import {
   doc,
+  getDoc,
   serverTimestamp,
   writeBatch,
   type Timestamp,
@@ -37,10 +38,162 @@ export interface SavedClientThreadRef {
   savedAt: number;
 }
 
+interface ThreadLookupEntry {
+  threadId: string;
+  businessType: string;
+  clientName: string;
+}
+
 const STORAGE_KEY = 'summit_saved_threads_v1';
 
 export function isValidThreadToken(id: string): boolean {
   return typeof id === 'string' && id.length >= 28 && id.length <= 64 && /^thr_[a-f0-9]+$/.test(id);
+}
+
+/**
+ * Postel's Law: Be liberal in what we accept.
+ * Accepts Kenyan phone numbers with spaces, dashes, 07xx, 01xx, +254, 254,
+ * or standard email addresses, and normalizes them consistently for both
+ * saving inquiries and looking up saved chats on any device.
+ */
+export function normalizeContactInput(raw: string): {
+  valid: boolean;
+  normalized: string;
+  hint?: string;
+} {
+  const trimmed = raw.trim();
+  if (!trimmed) return { valid: false, normalized: '', hint: 'Enter a WhatsApp number or email.' };
+
+  if (trimmed.includes('@')) {
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(trimmed);
+    return emailOk
+      ? { valid: true, normalized: trimmed.toLowerCase(), hint: 'Email detected' }
+      : { valid: false, normalized: trimmed, hint: 'Check email format (e.g. name@gmail.com).' };
+  }
+
+  const digitsOnly = trimmed.replace(/[\s\-()]/g, '');
+  if (/^\+?254[17]\d{8}$/.test(digitsOnly)) {
+    const clean = digitsOnly.startsWith('+') ? digitsOnly : `+${digitsOnly}`;
+    return { valid: true, normalized: clean, hint: 'Kenyan WhatsApp / phone number' };
+  }
+  if (/^0[17]\d{8}$/.test(digitsOnly)) {
+    return {
+      valid: true,
+      normalized: `+254${digitsOnly.slice(1)}`,
+      hint: 'Kenyan WhatsApp / phone number',
+    };
+  }
+  if (trimmed.length >= 7) {
+    return { valid: true, normalized: trimmed.toLowerCase() };
+  }
+  return {
+    valid: false,
+    normalized: trimmed,
+    hint: 'Use e.g. 0712 345 678, +254 712 345 678, or an email.',
+  };
+}
+
+export async function computeContactLookupHash(normalizedContact: string): Promise<string | null> {
+  if (typeof window === 'undefined' || !window.crypto?.subtle) return null;
+  const input = `summit-digital:${normalizedContact.trim().toLowerCase()}`;
+  const data = new TextEncoder().encode(input);
+  const digest = await window.crypto.subtle.digest('SHA-256', data);
+  const hex = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+  return `lk_${hex}`;
+}
+
+export async function prepareLookupEntries(
+  lookupHash: string,
+  newEntry: ThreadLookupEntry
+): Promise<{ exists: boolean; entries: ThreadLookupEntry[] }> {
+  try {
+    const snap = await getDoc(doc(db, 'threadLookups', lookupHash));
+    if (snap.exists()) {
+      const rawThreads = snap.data().threads;
+      const existingEntries: ThreadLookupEntry[] = Array.isArray(rawThreads)
+        ? rawThreads
+            .filter(
+              (item): item is ThreadLookupEntry =>
+                Boolean(item) &&
+                typeof item === 'object' &&
+                isValidThreadToken(String((item as ThreadLookupEntry).threadId ?? ''))
+            )
+            .map((item) => ({
+              threadId: String(item.threadId),
+              businessType: String(item.businessType).slice(0, 120),
+              clientName: String(item.clientName).slice(0, 100),
+            }))
+        : [];
+      const merged = [
+        newEntry,
+        ...existingEntries.filter((item) => item.threadId !== newEntry.threadId),
+      ].slice(0, 10);
+      return { exists: true, entries: merged };
+    }
+  } catch {
+    // Fall back to fresh lookup document if read fails
+  }
+  return { exists: false, entries: [newEntry] };
+}
+
+export async function lookupThreadsByContact(
+  rawContact: string
+): Promise<SavedClientThreadRef[]> {
+  const check = normalizeContactInput(rawContact);
+  if (!check.valid) {
+    throw new Error(check.hint || 'Please enter a valid WhatsApp number or email.');
+  }
+
+  const lookupHash = await computeContactLookupHash(check.normalized);
+  if (!lookupHash) {
+    throw new Error('Chat lookup is not supported in this browser.');
+  }
+
+  try {
+    const snap = await getDoc(doc(db, 'threadLookups', lookupHash));
+    if (!snap.exists()) {
+      return [];
+    }
+    const rawThreads = snap.data().threads;
+    if (!Array.isArray(rawThreads)) return [];
+
+    const now = Date.now();
+    const found: SavedClientThreadRef[] = rawThreads
+      .filter(
+        (item): item is ThreadLookupEntry =>
+          Boolean(item) &&
+          typeof item === 'object' &&
+          isValidThreadToken(String((item as ThreadLookupEntry).threadId ?? ''))
+      )
+      .map((item, idx) => ({
+        threadId: String(item.threadId),
+        clientName: String(item.clientName ?? 'Client'),
+        businessType: String(item.businessType ?? 'Local business'),
+        savedAt: now - idx,
+      }));
+
+    if (found.length > 0) {
+      // Save newest found threads into localStorage cleanly
+      const existing = loadSavedClientThreads();
+      const merged = [...found];
+      existing.forEach((item) => {
+        if (!merged.some((f) => f.threadId === item.threadId)) {
+          merged.push(item);
+        }
+      });
+      if (typeof window !== 'undefined') {
+        try {
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(merged.slice(0, 10)));
+        } catch {
+          // Ignore storage quota errors
+        }
+      }
+    }
+
+    return found;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, `threadLookups/${lookupHash}`);
+  }
 }
 
 export function createThreadToken(): string {
@@ -90,11 +243,6 @@ export function formatMessageTime(ts?: Timestamp | null): string {
 
   const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   return `${dateStr}, ${timeStr}`;
-}
-
-export function getThreadShareUrl(threadId: string): string {
-  if (typeof window === 'undefined') return `#/thread/${threadId}`;
-  return `${window.location.origin}${window.location.pathname}#/thread/${threadId}`;
 }
 
 export function loadSavedClientThreads(): SavedClientThreadRef[] {
@@ -170,6 +318,7 @@ export async function sendOwnerReply(params: {
   inquiryId: string;
   threadId: string | null;
   clientName: string;
+  clientContact: string;
   businessType: string;
   packageChoice: string;
   initialMessage: string;
@@ -214,19 +363,21 @@ export async function sendOwnerReply(params: {
       handleFirestoreError(error, OperationType.WRITE, `threads/${threadId}/messages/${msgId}`);
     }
   } else {
-    // Legacy inquiry created before two-way threads existed: create thread + seed original inquiry + owner reply
+    // Legacy inquiry created before two-way threads existed: create thread + seed original inquiry + owner reply + lookup index
     const newThreadId = createThreadToken();
     const threadRef = doc(db, 'threads', newThreadId);
     const initialMsgRef = doc(db, 'threads', newThreadId, 'messages', createMessageId('0_init'));
     const replyMsgRef = doc(db, 'threads', newThreadId, 'messages', createMessageId('1_owner'));
 
     const safeClientName = params.clientName.trim().slice(0, 100);
+    const safeName = safeClientName.length >= 2 ? safeClientName : 'Client';
+    const safeBusiness = (params.businessType.trim() || 'Local business').slice(0, 120);
     const safeInitialBody = params.initialMessage.trim().slice(0, 1500) || 'Website inquiry';
 
     batch.set(threadRef, {
       inquiryId: params.inquiryId,
-      clientName: safeClientName.length >= 2 ? safeClientName : 'Client',
-      businessType: (params.businessType.trim() || 'Local business').slice(0, 120),
+      clientName: safeName,
+      businessType: safeBusiness,
       packageChoice: params.packageChoice,
       status: 'replied',
       lastMessagePreview: buildPreview(trimmedBody),
@@ -237,7 +388,7 @@ export async function sendOwnerReply(params: {
     batch.set(initialMsgRef, {
       threadId: newThreadId,
       senderRole: 'client',
-      senderName: safeClientName.length >= 2 ? safeClientName : 'Client',
+      senderName: safeName,
       body: safeInitialBody,
       createdAt: serverTimestamp(),
     });
@@ -253,6 +404,30 @@ export async function sendOwnerReply(params: {
       status: 'replied',
       updatedAt: serverTimestamp(),
     });
+
+    const contactCheck = normalizeContactInput(params.clientContact);
+    if (contactCheck.valid) {
+      const lookupHash = await computeContactLookupHash(contactCheck.normalized);
+      if (lookupHash) {
+        const prepared = await prepareLookupEntries(lookupHash, {
+          threadId: newThreadId,
+          businessType: safeBusiness,
+          clientName: safeName,
+        });
+        const lookupRef = doc(db, 'threadLookups', lookupHash);
+        if (prepared.exists) {
+          batch.update(lookupRef, {
+            threads: prepared.entries,
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          batch.set(lookupRef, {
+            threads: prepared.entries,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
+    }
 
     try {
       await batch.commit();

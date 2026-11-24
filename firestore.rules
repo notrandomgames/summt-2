@@ -15,6 +15,10 @@ service cloud.firestore {
       return id is string && id.size() >= 28 && id.size() <= 64 && id.matches('^thr_[a-f0-9]+$');
     }
 
+    function isValidLookupId(id) {
+      return id is string && id.size() == 67 && id.matches('^lk_[a-f0-9]{64}$');
+    }
+
     function incoming() {
       return request.resource.data;
     }
@@ -137,6 +141,25 @@ service cloud.firestore {
         && data.createdAt is timestamp;
     }
 
+    function isValidThreadLookupEntry(entry) {
+      return entry is map
+        && entry.keys().hasAll(['threadId', 'businessType', 'clientName'])
+        && entry.keys().hasOnly(['threadId', 'businessType', 'clientName'])
+        && isValidThreadToken(entry.threadId)
+        && entry.businessType is string && entry.businessType.size() >= 1 && entry.businessType.size() <= 120
+        && entry.clientName is string && entry.clientName.size() >= 2 && entry.clientName.size() <= 100;
+    }
+
+    function isValidThreadLookup(data) {
+      return data.keys().hasAll(['threads', 'updatedAt'])
+        && data.keys().hasOnly(['threads', 'updatedAt'])
+        && data.threads is list
+        && data.threads.size() >= 1
+        && data.threads.size() <= 10
+        && isValidThreadLookupEntry(data.threads[0])
+        && data.updatedAt is timestamp;
+    }
+
     match /admins/{adminId} {
       allow get: if isSignedIn() && isValidId(adminId) && request.auth.uid == adminId && isVerifiedUser();
       allow list, create, update, delete: if false;
@@ -168,6 +191,31 @@ service cloud.firestore {
         && incoming().updatedAt == request.time;
 
       allow delete: if isValidId(inquiryId) && isAdmin();
+    }
+
+    match /threadLookups/{lookupHash} {
+      // Direct get by SHA-256 contact hash only; public listing is strictly disabled
+      allow get: if isValidLookupId(lookupHash);
+      allow list: if isAdmin();
+
+      allow create: if isValidLookupId(lookupHash)
+        && isValidThreadLookup(incoming())
+        && incoming().updatedAt == request.time
+        && existsAfter(/databases/$(database)/documents/threads/$(incoming().threads[0].threadId));
+
+      allow update: if isValidLookupId(lookupHash)
+        && isValidThreadLookup(incoming())
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['threads', 'updatedAt'])
+            && incoming().threads.size() >= existing().threads.size()
+            && existsAfter(/databases/$(database)/documents/threads/$(incoming().threads[0].threadId))
+          )
+        );
+
+      allow delete: if isValidLookupId(lookupHash) && isAdmin();
     }
 
     match /threads/{threadId} {

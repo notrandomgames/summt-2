@@ -5,17 +5,17 @@
 
 import { useEffect, useState } from 'react';
 import { motion, MotionConfig } from 'motion/react';
-import { ArrowLeft, ArrowRight, Check, ExternalLink, MessageCircle, Phone } from 'lucide-react';
+import { ArrowRight, Check, ExternalLink, MessageCircle, Phone } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { HeroPreviewCard } from './components/HeroPreviewCard';
 import { ContactForm, PACKAGE_OPTIONS } from './components/ContactForm';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { OwnerInbox } from './components/OwnerInbox';
-import { ThreadConversation } from './components/ThreadConversation';
+import { ClientChatPage } from './components/ClientChatPage';
 import { SampleSalonPage } from './components/SampleSalonPage';
 import { SampleBarbershopPage } from './components/SampleBarbershopPage';
 import { SampleCatererPage } from './components/SampleCatererPage';
-import { isValidThreadToken } from './lib/threads';
+import { isValidThreadToken, loadSavedClientThreads } from './lib/threads';
 import {
   CONTACT_INFO,
   getWhatsAppUrl,
@@ -62,8 +62,12 @@ function parseThreadFromLocation(): string | null {
 
 export default function App() {
   const [showInbox, setShowInbox] = useState(() => window.location.hash === '#/inbox');
+  const [showClientChat, setShowClientChat] = useState(() => window.location.hash === '#/chat');
   const [activeThreadId, setActiveThreadId] = useState<string | null>(() =>
     parseThreadFromLocation()
+  );
+  const [savedChatCount, setSavedChatCount] = useState<number>(
+    () => loadSavedClientThreads().length
   );
   const [activeSample, setActiveSample] = useState<SampleSlug | null>(() =>
     parseDemoFromHash(window.location.hash)
@@ -77,11 +81,13 @@ export default function App() {
   useEffect(() => {
     const onHashChange = () => {
       setShowInbox(window.location.hash === '#/inbox');
+      const nextShowChat = window.location.hash === '#/chat';
+      setShowClientChat(nextShowChat);
       const nextThread = parseThreadFromLocation();
       setActiveThreadId(nextThread);
       const nextSample = parseDemoFromHash(window.location.hash);
       setActiveSample(nextSample);
-      if (nextSample || nextThread) {
+      if (nextSample || nextThread || nextShowChat) {
         window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
       }
     };
@@ -132,9 +138,17 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
   };
 
+  const openChat = () => {
+    window.location.hash = '#/chat';
+    setShowClientChat(true);
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+  };
+
   const closeThread = () => {
     window.location.hash = '';
+    setShowClientChat(false);
     setActiveThreadId(null);
+    setSavedChatCount(loadSavedClientThreads().length);
     window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
   };
 
@@ -145,43 +159,21 @@ export default function App() {
 
   const renderPage = () => {
     if (showInbox) return <OwnerInbox onBack={closeInbox} />;
-    if (activeThreadId) {
+    if (showClientChat || activeThreadId) {
       return (
-        <div className="min-h-screen bg-slate-50 text-slate-900">
-          <header className="border-b border-slate-200 bg-white">
-            <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
-              <button
-                type="button"
-                onClick={closeThread}
-                className="inline-flex min-h-[40px] cursor-pointer items-center gap-2 text-sm font-medium text-slate-700 hover:text-slate-900"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Back to Summit Digital
-              </button>
-              <span className="text-xs font-medium text-[#0F5C43]">
-                {CONTACT_INFO.brandName} · Built by {CONTACT_INFO.ownerName}
-              </span>
-            </div>
-          </header>
-          <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-            <h1 className="font-display mb-2 text-2xl font-bold text-slate-900">
-              Your messages with Emman
-            </h1>
-            <p className="mb-6 text-sm text-slate-600">
-              Your conversation stays saved here. Send a reply anytime or bookmark this link to check back later.
-            </p>
-            <ThreadConversation
-              threadId={activeThreadId}
-              onStartNewInquiry={() => {
-                window.location.hash = '#contact';
-                setActiveThreadId(null);
-                setTimeout(() => {
-                  document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
-                }, 60);
-              }}
-            />
-          </main>
-        </div>
+        <ClientChatPage
+          initialThreadId={activeThreadId}
+          onBack={closeThread}
+          onStartNewInquiry={() => {
+            window.location.hash = '#contact';
+            setShowClientChat(false);
+            setActiveThreadId(null);
+            setSavedChatCount(loadSavedClientThreads().length);
+            setTimeout(() => {
+              document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
+            }, 60);
+          }}
+        />
       );
     }
     if (activeSample === 'salon') return <SampleSalonPage onBack={closeSample} />;
@@ -190,7 +182,11 @@ export default function App() {
 
     return (
       <div id="top" className="min-h-screen bg-slate-50 text-slate-900">
-        <Navbar onNavigateSection={handleNavigateSection} />
+        <Navbar
+          onNavigateSection={handleNavigateSection}
+          onOpenChat={openChat}
+          savedChatCount={savedChatCount}
+        />
 
         <main>
           {/* Hero Section */}
@@ -268,6 +264,13 @@ export default function App() {
                   >
                     See KSh prices
                   </a>
+                  <button
+                    type="button"
+                    onClick={openChat}
+                    className="cursor-pointer font-medium text-[#0F5C43] underline underline-offset-4 hover:text-[#0B4734]"
+                  >
+                    Open my chat
+                  </button>
                 </motion.div>
               </motion.div>
 
@@ -585,7 +588,10 @@ export default function App() {
                   </p>
                 </div>
               </div>
-              <ContactForm selectedPackage={selectedPackage} />
+              <ContactForm
+                selectedPackage={selectedPackage}
+                onSavedThreadsChange={(threads) => setSavedChatCount(threads.length)}
+              />
             </div>
           </section>
         </main>
@@ -632,6 +638,13 @@ export default function App() {
               >
                 {CONTACT_INFO.instagramHandle}
               </a>
+              <button
+                type="button"
+                onClick={openChat}
+                className="inline-flex min-h-[44px] cursor-pointer items-center font-medium text-[#0F5C43] hover:underline underline-offset-4"
+              >
+                Open my chat
+              </button>
               <button
                 type="button"
                 onClick={openInbox}

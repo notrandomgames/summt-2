@@ -20,10 +20,8 @@ import {
 } from 'firebase/firestore';
 import {
   ArrowLeft,
-  Check,
   ChevronDown,
   ChevronUp,
-  Copy,
   LogOut,
   MessageSquare,
   Send,
@@ -38,7 +36,6 @@ import {
 } from '../lib/firebase';
 import {
   formatMessageTime,
-  getThreadShareUrl,
   isValidThreadToken,
   sendOwnerReply,
   sortMessagesChronologically,
@@ -76,7 +73,6 @@ function OwnerThreadPanel({ inquiry, threadMeta }: OwnerThreadPanelProps) {
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
   const [panelError, setPanelError] = useState<string | null>(null);
-  const [copiedLink, setCopiedLink] = useState(false);
 
   const activeThreadId = inquiry.threadId || threadMeta?.threadId || null;
 
@@ -135,6 +131,7 @@ function OwnerThreadPanel({ inquiry, threadMeta }: OwnerThreadPanelProps) {
         inquiryId: inquiry.id,
         threadId: activeThreadId,
         clientName: inquiry.name,
+        clientContact: inquiry.contact,
         businessType: inquiry.businessType,
         packageChoice: inquiry.packageChoice,
         initialMessage: inquiry.message,
@@ -160,43 +157,15 @@ function OwnerThreadPanel({ inquiry, threadMeta }: OwnerThreadPanelProps) {
     }
   };
 
-  const handleCopyClientLink = async () => {
-    if (!activeThreadId) return;
-    const url = getThreadShareUrl(activeThreadId);
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopiedLink(true);
-      window.setTimeout(() => setCopiedLink(false), 2500);
-    } catch {
-      setPanelError(`Client chat link: ${url}`);
-    }
-  };
-
   return (
     <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
         <span className="text-xs font-semibold text-slate-700">
           Saved conversation ({messages.length > 0 ? `${messages.length} messages` : 'Original message'})
         </span>
-        {activeThreadId && (
-          <button
-            type="button"
-            onClick={() => void handleCopyClientLink()}
-            className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-          >
-            {copiedLink ? (
-              <>
-                <Check className="h-3.5 w-3.5 text-[#0F5C43]" />
-                <span>Client link copied</span>
-              </>
-            ) : (
-              <>
-                <Copy className="h-3.5 w-3.5" />
-                <span>Copy client reply link</span>
-              </>
-            )}
-          </button>
-        )}
+        <span className="text-[11px] text-slate-500">
+          Client can reopen under My Chat with {inquiry.contact}
+        </span>
       </div>
 
       {/* Messages Feed */}
